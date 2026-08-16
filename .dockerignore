@@ -1,0 +1,8 @@
+node_modules
+dist
+.tmp
+.git
+.github
+assets
+*.md
+!README.md

@@ -1,0 +1,30 @@
+[
+  {
+    "key": "days",
+    "x": 40,
+    "y": 40,
+    "width": 134,
+    "height": 173
+  },
+  {
+    "key": "hours",
+    "x": 247,
+    "y": 40,
+    "width": 134,
+    "height": 173
+  },
+  {
+    "key": "minutes",
+    "x": 454,
+    "y": 40,
+    "width": 134,
+    "height": 173
+  },
+  {
+    "key": "seconds",
+    "x": 661,
+    "y": 40,
+    "width": 134,
+    "height": 173
+  }
+]

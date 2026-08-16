@@ -1,0 +1,76 @@
+{
+  "name": "email-countdown-timer",
+  "version": "0.1.0",
+  "description": "Self-hosted animated countdown timers for email. Renders animated GIFs (with an Outlook PNG fallback) that work in any ESP. No database, no account, no Chrome.",
+  "keywords": [
+    "email",
+    "countdown",
+    "countdown-timer",
+    "gif",
+    "animated-gif",
+    "email-marketing",
+    "mjml",
+    "self-hosted",
+    "outlook"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/temway/email-countdown-timer.git"
+  },
+  "homepage": "https://countdown.temway.com",
+  "bugs": {
+    "url": "https://github.com/temway/email-countdown-timer/issues"
+  },
+  "type": "module",
+  "main": "dist/lib.js",
+  "types": "dist/lib.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib.d.ts",
+      "default": "./dist/lib.js"
+    }
+  },
+  "bin": {
+    "email-countdown-timer": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "fonts",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.10.0",
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "gifenc": "1.0.3",
+    "hono": "^4.6.0",
+    "pngjs": "7.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "@types/pngjs": "^6.0.5",
+    "gifuct-js": "^2.1.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.0"
+  }
+}

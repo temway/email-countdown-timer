@@ -1,0 +1,83 @@
+# Public demo instance. A self-hoster does not need this file — the Dockerfile
+# alone is the supported deployment path, and everything here is specific to
+# running one open instance on Fly.
+
+app            = "email-countdown-demo"
+primary_region = "ams"
+
+# A render is tens of milliseconds, so a short drain is ample. Set explicitly
+# because src/index.ts registers no SIGTERM handler: Node exits immediately and
+# drops anything in flight. At sub-second requests across two machines that is a
+# handful of images during a rolling deploy, not an outage.
+kill_signal  = "SIGINT"
+kill_timeout = 5
+
+[build]
+  # Explicit so a future `fly launch` cannot decide this is a buildpack app and
+  # silently discard the glibc reasoning in the Dockerfile header — resvg-js
+  # ships prebuilt binaries per platform AND libc, and an Alpine base would need
+  # a musl build.
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  # No-op — src/config.ts already defaults to 8080. States the contract with
+  # internal_port below, which is the one that actually has to match.
+  PORT = "8080"
+  # Turns on the canonical/OG tags and the sitemap. Unset everywhere else, which
+  # is what keeps a self-hosted instance from inheriting our canonical URLs.
+  PUBLIC_ORIGIN = "https://countdown.temway.com"
+  # SIGNING_SECRET is deliberately ABSENT. src/ui/builder.ts cannot produce
+  # signed URLs, so setting it here would make the builder's own preview 401 —
+  # which is not a demo. Abuse control therefore lives entirely in the CDN and
+  # in the concurrency and machine-count caps below.
+
+[http_service]
+  internal_port = 8080
+  force_https   = true
+
+  # Do NOT scale to zero. The cost of a cold machine here is not the boot, it is
+  # that both LRU caches in src/service.ts die with the process. A fully cold
+  # request pays machine start + Node boot + resvg dlopen + a 1.7MB font load +
+  # two rasterisations + a 31-frame composite, against ~13ms warm. That lands on
+  # whoever opens the email first after a quiet period, and an email client shows
+  # a broken image rather than waiting for it.
+  auto_stop_machines   = "stop"
+  auto_start_machines  = true
+  min_machines_running = 1
+  processes            = ["app"]
+
+  [http_service.concurrency]
+    # `requests`, not `connections`: email clients and CDNs open and close
+    # connections freely, so what matters is work in flight.
+    type = "requests"
+    # resvg renders synchronously and blocks the single Node thread — roughly
+    # 13-40ms at size=48 and 120-150ms at size=160. Twenty in flight is about a
+    # second of queue depth, which is where work should spill to the second
+    # machine. Most requests inside a 20s bucket are cache hits costing well
+    # under a millisecond, so the real ceiling is far higher; tune from
+    # `fly metrics` once the actual hit ratio is visible.
+    soft_limit = 20
+    # A circuit breaker, not a target. Past this Fly's proxy stops routing here,
+    # so a flood gets fast 503s instead of making every request slow.
+    hard_limit = 60
+
+  # The http_service variant rather than a top-level [checks] block: this one is
+  # wired into request routing, so a machine failing /health stops receiving
+  # traffic instead of merely being reported unhealthy. (The HEALTHCHECK in the
+  # Dockerfile is inert here — Fly does not run dockerd and ignores OCI
+  # healthcheck metadata. It is kept there for `docker run` parity.)
+  [[http_service.checks]]
+    grace_period = "5s"
+    interval     = "15s"
+    method       = "GET"
+    timeout      = "2s"
+    path         = "/health"
+
+[[vm]]
+  size   = "shared-cpu-1x"
+  memory = "512mb"
+  # 512MB is comfortable for normal traffic but is NOT safe against adversarial
+  # input: the artifact cache is bounded by entry count, not bytes, and entries
+  # scale with size². See the byte-budget note in src/service.ts.
+  processes = ["app"]

@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No `version:` — the action reads package.json's `packageManager` field,
+      # which is what corepack uses in the Dockerfile too. Pinning it in two
+      # places is how CI and the image end up on different pnpm majors.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+      # The offline promise is a headline claim, so prove it rather than trust
+      # it: start the built server with no environment configured and render a
+      # real GIF. Catches a missing font in the published files list, a bad
+      # runtime path from dist/, and any accidental network dependency.
+      - name: Smoke test the built server
+        run: |
+          node dist/index.js &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8080/health && break
+            sleep 1
+          done
+          curl -sf "http://127.0.0.1:8080/c.gif?until=2099-01-01T00:00:00Z" -o /tmp/out.gif
+          file /tmp/out.gif | grep -q 'GIF image data' || { echo "not a GIF"; exit 1; }
+          test "$(head -c 6 /tmp/out.gif)" = "GIF89a" || { echo "bad GIF header"; exit 1; }
+
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: email-countdown-timer:ci
+
+      # Same claim, verified in the shipping artefact: no env, no network.
+      - name: Render a GIF from the container
+        run: |
+          docker run -d --name ect -p 8080:8080 email-countdown-timer:ci
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8080/health && break
+            sleep 1
+          done
+          curl -sf "http://127.0.0.1:8080/c.gif?until=2099-01-01T00:00:00Z" -o /tmp/out.gif
+          test "$(head -c 6 /tmp/out.gif)" = "GIF89a" || { docker logs ect; exit 1; }
+          docker rm -f ect
+
+      # Publishing happens AFTER the smoke test, and re-tags the image that was
+      # just proven rather than rebuilding — nothing reaches the registry that
+      # has not rendered a real GIF. The README's quick-start pulls this tag, so
+      # a broken push is a broken first impression.
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to GHCR
+        if: github.event_name == 'push'
+        run: |
+          IMAGE=ghcr.io/${{ github.repository_owner }}/email-countdown-timer
+          docker tag email-countdown-timer:ci "$IMAGE:latest"
+          docker tag email-countdown-timer:ci "$IMAGE:${{ github.sha }}"
+          docker push "$IMAGE:latest"
+          docker push "$IMAGE:${{ github.sha }}"
+
+  deploy:
+    # Gated on both jobs rather than a separate workflow_run: that trigger runs
+    # the DEFAULT branch's workflow definition and, without an explicit head_sha
+    # checkout, quietly deploys the wrong commit. `needs` gives identical gating
+    # with none of that, and keeps the deploy in the same run as the tests that
+    # authorised it.
+    needs: [test, docker]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # An Environment rather than a repo-level secret, so a fork PR cannot reach
+    # FLY_API_TOKEN.
+    environment: demo
+    # Two rapid merges queue instead of racing. Cancelling a deploy mid
+    # rolling-restart strands machines on mixed versions.
+    concurrency:
+      group: deploy-fly
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      # --remote-only is not a preference: runners are x86_64 and so are Fly
+      # Machines, but @resvg/resvg-js resolves its native binary at install time
+      # by platform + libc + arch, so building anywhere other than the target's
+      # architecture produces an image that cannot start.
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      # The same assertion the other two jobs make, now against the live origin.
+      # A deploy that boots but renders garbage should fail the run, not sit
+      # green. Hits *.fly.dev directly: the image routes are never redirected, so
+      # this measures the origin rather than whatever the CDN had cached.
+      - name: Verify the deployed renderer
+        run: |
+          URL="https://email-countdown-demo.fly.dev/c.gif?until=2099-01-01T00:00:00Z"
+          curl -sf --retry 5 --retry-delay 3 --retry-connrefused "$URL" -o /tmp/out.gif
+          test "$(head -c 6 /tmp/out.gif)" = "GIF89a" || { echo "bad GIF header"; exit 1; }
+          test "$(tail -c 1 /tmp/out.gif | xxd -p)" = "3b" || { echo "truncated GIF"; exit 1; }

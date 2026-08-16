@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.tmp/
+
+# Golden-image fixtures MUST be committed — they are the proof the ported
+# compositor still behaves identically, and the golden tests regenerate a
+# missing file and then compare against what they just wrote, so their absence
+# passes vacuously rather than failing. A common global gitignore pattern
+# (`__*__`) silently excludes them, hence the explicit re-inclusion.
+!**/__fixtures__/
+!**/__fixtures__/**
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example

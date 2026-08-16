@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    // Deliberately OFF. The compositor and its test suite were ported verbatim
+    // from a codebase without it, and their proof of correctness is that they
+    // pass unmodified. Turning it on would mean rewriting ~1,400 lines of
+    // known-good ported code to satisfy a linter, which trades real assurance
+    // for a stylistic one.
+    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"]
+}
