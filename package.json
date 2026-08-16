@@ -56,7 +56,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "demos": "tsx src/tools/generate-demos.ts"
+    "demos": "tsx src/tools/generate-demos.ts",
+    "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",

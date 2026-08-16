@@ -151,6 +151,8 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
   #theme { flex: none; }
   .notice { background: var(--notice-bg); border: 1px solid var(--notice-line); color: var(--notice-ink); padding: 12px 16px; border-radius: 8px; font-size: 0.88rem; }
   footer { margin-top: 44px; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--line); padding-top: 20px; }
+  footer p + p { margin-top: 12px; }
+  footer a { text-decoration: underline; }
   a { color: var(--accent); }
 </style>
 </head>
@@ -241,9 +243,15 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
   <button type="button" data-copy="snippet">Copy HTML</button>
 
   <footer>
-    The <code>&lt;img&gt;</code> tag above renders the animated GIF. Outlook ignores GIF animation and shows
-    the first frame, so the snippet points there directly — swap <code>.gif</code> for <code>.png</code> if
-    you want a fully static image.
+    <p>
+      The <code>&lt;img&gt;</code> tag above renders the animated GIF. Outlook ignores GIF animation and shows
+      the first frame, so the snippet points there directly — swap <code>.gif</code> for <code>.png</code> if
+      you want a fully static image.
+    </p>
+    <p>
+      Built by the team behind <a href="https://temway.com">Temway</a>, an on-brand email builder for teams
+      and their AI agents — if you want a visual editor around timers like this one, that is what we make.
+    </p>
   </footer>
 </main>
 

@@ -74,3 +74,22 @@ describe('the caption inputs match what the server accepts', () => {
     for (const cap of caps) expect(cap).toBe(MAX_LABEL_LENGTH);
   });
 });
+
+describe('the footer carries attribution to Temway', () => {
+  // Rendered without an origin on purpose: attribution is a credit to the
+  // builder's authors, so it belongs on every self-hosted instance too, not
+  // just the public one. The LICENSE already credits Temway the same way.
+  const html = renderBuilderPage(false);
+
+  it('links to temway.com with brand anchor text', () => {
+    expect(html).toContain('<a href="https://temway.com">Temway</a>');
+  });
+
+  it('leaves the link followed', () => {
+    // The whole point of the attribution is a crawlable followed link; a
+    // rel="nofollow"/"sponsored" slipped in later would silently void it.
+    const link = html.match(/<a href="https:\/\/temway\.com"[^>]*>/);
+    expect(link).not.toBeNull();
+    expect(link![0]).not.toMatch(/rel="/);
+  });
+});
