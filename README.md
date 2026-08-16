@@ -7,13 +7,20 @@ Brevo, SendGrid — anywhere you can write HTML.
 No database. No account. No Chrome. No external calls. One container.
 
 <p align="center">
-  <img src="assets/demo-dark.gif" alt="Animated countdown timer for email — dark theme" width="362">
+  <img src="assets/demo-dark.gif" alt="White digits on deep navy — the default look" width="362">
 </p>
 
 <p align="center">
-  <img src="assets/demo-amber.gif" alt="Countdown timer, amber on navy" width="328">
-  <img src="assets/demo-light.gif" alt="Countdown timer, light theme with border" width="332">
-  <img src="assets/demo-minimal.gif" alt="Minimal transparent countdown timer" width="232">
+  <img src="assets/demo-amber.gif" alt="Warm amber digits on ocean navy" width="328">
+  <img src="assets/demo-light.gif" alt="Near-black digits on a light card with a soft border" width="332">
+  <img src="assets/demo-minimal.gif" alt="Bare rose digits, no board — sits on the email itself" width="232">
+</p>
+
+<p align="center">
+  <img src="assets/demo-ocean.gif" alt="Ice-blue digits, misted captions, midnight-teal board" width="330">
+  <img src="assets/demo-forest.gif" alt="Mint digits, pine captions, deep-green board" width="328">
+  <img src="assets/demo-rose.gif" alt="Crimson digits on blush, dotted dividers" width="332">
+  <img src="assets/demo-slate.gif" alt="Ink digits on a transparent board with a silver rule" width="304">
 </p>
 
 ## Why this exists
