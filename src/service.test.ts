@@ -30,6 +30,7 @@ describe('designKey', () => {
       borderColor: DEFAULT_DESIGN.borderColor,
       boardBackground: DEFAULT_DESIGN.boardBackground,
       digitColor: DEFAULT_DESIGN.digitColor,
+      labelColor: DEFAULT_DESIGN.labelColor,
       showLabels: DEFAULT_DESIGN.showLabels,
       units: DEFAULT_DESIGN.units,
     };
@@ -43,6 +44,7 @@ describe('designKey', () => {
       { showLabels: false },
       { unitLabels: { days: 'JOURS' } },
       { digitColor: '#000000' },
+      { labelColor: '#969cb3' },
       { boardBackground: 'transparent' },
       { borderColor: '#000000' },
       { borderWidth: 4 },

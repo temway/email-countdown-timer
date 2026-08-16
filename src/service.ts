@@ -103,6 +103,7 @@ export function designKey(design: CountdownDesign): string {
     // image to another, which is worse than a cache miss by a wide margin.
     UNIT_NAMES.map((u) => encodeURIComponent(resolveUnitLabel(u, design.unitLabels))).join(','),
     design.digitColor,
+    design.labelColor,
     design.boardBackground,
     design.borderColor,
     design.borderWidth,

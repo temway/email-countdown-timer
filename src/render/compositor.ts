@@ -99,9 +99,14 @@ export interface BoundingBox {
 }
 
 /**
- * The three brand colors captured into the countdown design. The renderer
+ * The brand colors captured into the countdown design. The renderer
  * merges these INTO the base palette (replacing the nearest Plan9 entry for
  * each) so the output GIF uses the user's actual brand colors, not approximations.
+ *
+ * `label` is optional and merged LAST: when it equals `digit` (the common case —
+ * captions share the digit ink unless `?label` says otherwise) the pass finds
+ * digit's exact RGBA already in the palette and rewrites it unchanged, so the
+ * three-color and four-color calls with `label === digit` are byte-identical.
  *
  * Matches `CountdownColors` in countdown-timers.table.ts (Contract 2 inputs).
  */
@@ -109,6 +114,7 @@ export interface CountdownColors {
   readonly digit: string;
   readonly board: string;
   readonly border: string;
+  readonly label?: string;
 }
 
 /**
@@ -318,8 +324,15 @@ function buildPalette(colors: CountdownColors): RenderPalette {
     rgba[i + 1] = [r, g, b, 255];
   }
 
-  // Replace the nearest entry for each brand color (fixed order: digit, board, border).
-  const order: readonly string[] = [colors.digit, colors.board, colors.border];
+  // Replace the nearest entry for each brand color (fixed order: digit, board,
+  // border, then label when set). Label goes last because it is the only
+  // optional one, and because a label that equals the digit is a no-op by
+  // construction: the digit pass has already written that exact RGBA, so the
+  // label pass breaks on `sum === 0` below and overwrites identical values.
+  const order: readonly string[] =
+    colors.label === undefined
+      ? [colors.digit, colors.board, colors.border]
+      : [colors.digit, colors.board, colors.border, colors.label];
   for (const hex of order) {
     const source = parseHex(hex);
 

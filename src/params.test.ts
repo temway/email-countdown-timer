@@ -83,6 +83,18 @@ describe('colours', () => {
     expect(ok({ board: 'transparent' }).design.boardBackground).toBe('transparent');
     expect(err({ until: UNTIL, digit: 'transparent' })).toMatch(/digit/);
   });
+
+  it('falls back to the digit colour when `label` is absent', () => {
+    expect(ok().design.labelColor).toBe(ok().design.digitColor);
+    // And tracks the digit colour, not the DEFAULT digit colour.
+    expect(ok({ digit: 'AABBCC' }).design.labelColor).toBe('#aabbcc');
+  });
+
+  it('normalises `label` like the other colour params', () => {
+    expect(ok({ label: '969CB3' }).design.labelColor).toBe('#969cb3');
+    expect(ok({ label: '#969CB3' }).design.labelColor).toBe('#969cb3');
+    expect(err({ until: UNTIL, label: 'fff' })).toMatch(/label/);
+  });
 });
 
 describe('units', () => {

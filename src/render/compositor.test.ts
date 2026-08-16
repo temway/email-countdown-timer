@@ -887,6 +887,65 @@ describe('renderCountdownGif — Contract 10 (faithful deterministic port)', () 
   });
 });
 
+describe('renderCountdownGif — label colour (4th brand colour)', () => {
+  /**
+   * `label` is the only optional colour, and the common case is `label ===
+   * digit` (captions share the digit ink unless `?label` says otherwise). That
+   * case MUST be byte-identical to the three-colour render: the palette merge
+   * appends label last, where an exact-match hit rewrites digit's own slot with
+   * identical values. If this test fails, every URL without `?label` changed
+   * bytes for nothing.
+   */
+  it('label === digit is byte-identical to omitting the label colour', () => {
+    // Arrange
+    const fixture = makeSmallFixture(30_000);
+    const withLabel: CountdownColors = { ...COLORS, label: COLORS.digit };
+
+    // Act
+    const threeColour = renderCountdownGif(
+      fixture.board,
+      fixture.digits,
+      fixture.boardBoxes,
+      fixture.digitsBoxes,
+      fixture.colors,
+      fixture.remainingMs,
+    );
+    const fourColour = renderCountdownGif(
+      fixture.board,
+      fixture.digits,
+      fixture.boardBoxes,
+      fixture.digitsBoxes,
+      withLabel,
+      fixture.remainingMs,
+    );
+
+    // Assert
+    expect(Buffer.compare(Buffer.from(threeColour.gifBytes), Buffer.from(fourColour.gifBytes))).toBe(0);
+    expect(Buffer.compare(Buffer.from(threeColour.pngBytes), Buffer.from(fourColour.pngBytes))).toBe(0);
+  });
+
+  it('a distinct label colour survives into the global color table', () => {
+    // Arrange — a caption ink nowhere near the other three brand colours.
+    const fixture = makeSmallFixture(30_000);
+    const label = '#00ff88';
+    const [lr, lg, lb] = parseHexTriplet(label);
+
+    // Act
+    const { gifBytes } = renderCountdownGif(
+      fixture.board,
+      fixture.digits,
+      fixture.boardBoxes,
+      fixture.digitsBoxes,
+      { ...COLORS, label },
+      fixture.remainingMs,
+    );
+    const palette = parseGlobalColorTable(gifBytes);
+
+    // Assert
+    expect(paletteContains(palette, [lr, lg, lb])).toBe(true);
+  });
+});
+
 describe('renderCountdownGif — performance', () => {
   it('cold-miss render of a 600x120 30-frame timer completes under 200ms', () => {
     // Arrange — production-shaped fixture (the spec's target size).

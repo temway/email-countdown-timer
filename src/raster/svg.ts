@@ -95,7 +95,7 @@ export function buildBoardSvg(design: CountdownDesign, layout: BoardLayout): str
   for (const label of layout.labels) {
     parts.push(
       `<text x="${label.centreX}" y="${label.baselineY}" font-size="${layout.labelFontSize}"` +
-        ` fill="${escapeXml(design.digitColor)}" text-anchor="middle"` +
+        ` fill="${escapeXml(design.labelColor)}" text-anchor="middle"` +
         ` letter-spacing="${letterSpacing}">${escapeXml(label.text)}</text>`,
     );
   }

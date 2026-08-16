@@ -78,8 +78,17 @@ export interface CountdownDesign {
    * rather than clipping, so long words are safe but not free.
    */
   readonly unitLabels?: UnitLabelOverrides;
-  /** Digit + divider + label ink colour, as `#rrggbb`. */
+  /** Digit + divider ink colour, as `#rrggbb`. */
   readonly digitColor: string;
+  /**
+   * Unit-caption ink colour, as `#rrggbb`. Digits and dividers keep
+   * {@link CountdownDesign.digitColor}.
+   *
+   * Resolved rather than optional: the query layer falls back to the digit
+   * colour once (`?label` absent ⇒ `labelColor === digitColor`), so no consumer
+   * downstream of the design ever re-derives it.
+   */
+  readonly labelColor: string;
   /** Board fill — `#rrggbb` or the literal `'transparent'`. */
   readonly boardBackground: BoardBackground;
   /** Border colour, as `#rrggbb`. Ignored when `borderWidth` is 0. */
@@ -107,6 +116,7 @@ export const DEFAULT_DESIGN: CountdownDesign = {
   showLabels: true,
   unitLabels: {},
   digitColor: '#ffffff',
+  labelColor: '#ffffff',
   boardBackground: '#1a1a2e',
   borderColor: '#1a1a2e',
   borderWidth: 0,
