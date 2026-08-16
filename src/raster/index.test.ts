@@ -152,9 +152,43 @@ describe('board background', () => {
 
   it('passes the design colours through to the palette', () => {
     const { colors } = generateArtifacts(
-      design({ digitColor: '#abcdef', boardBackground: '#123456', borderColor: '#fedcba' }),
+      design({ digitColor: '#abcdef', labelColor: '#987654', boardBackground: '#123456', borderColor: '#fedcba' }),
     );
-    expect(colors).toEqual({ digit: '#abcdef', board: '#123456', border: '#fedcba' });
+    expect(colors).toEqual({ digit: '#abcdef', label: '#987654', board: '#123456', border: '#fedcba' });
+  });
+});
+
+describe('label colour', () => {
+  /**
+   * `labelColor` exists so captions can be dimmed against the digits. The
+   * contract splits three ways: captions take `labelColor`; digits AND dividers
+   * keep `digitColor`. The `space` divider isolates the caption ink from the
+   * divider ink, so each assertion sees exactly one of the two.
+   */
+  it('paints captions in the label colour and nothing else', () => {
+    const { board, digits } = generateArtifacts(
+      design({
+        digitColor: '#ff0000',
+        labelColor: '#00ff00',
+        boardBackground: '#000000',
+        dividerStyle: 'space',
+      }),
+    );
+    expect(countNear(board, '#00ff00')).toBeGreaterThan(0);
+    expect(countNear(digits, '#00ff00')).toBe(0);
+  });
+
+  it('keeps dividers on the digit colour when the label colour differs', () => {
+    const { board } = generateArtifacts(
+      design({
+        digitColor: '#ff0000',
+        labelColor: '#00ff00',
+        boardBackground: '#000000',
+        dividerStyle: 'colon',
+      }),
+    );
+    expect(countNear(board, '#ff0000')).toBeGreaterThan(0); // dividers
+    expect(countNear(board, '#00ff00')).toBeGreaterThan(0); // captions
   });
 });
 

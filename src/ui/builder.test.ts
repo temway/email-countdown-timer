@@ -9,6 +9,7 @@ import {
   type CountdownDesign,
   type DividerStyle,
 } from '../raster/options.js';
+import { THEMES } from '../raster/themes.js';
 import { renderBuilderPage } from './builder.js';
 
 function design(overrides: Partial<CountdownDesign> = {}): CountdownDesign {
@@ -86,6 +87,55 @@ describe('the caption inputs match what the server accepts', () => {
     const caps = [...html.matchAll(/maxlength="(\d+)"/g)].map((m) => Number(m[1]));
     expect(caps).toHaveLength(UNIT_NAMES.length);
     for (const cap of caps) expect(cap).toBe(MAX_LABEL_LENGTH);
+  });
+});
+
+describe('the theme picker', () => {
+  const html = renderBuilderPage(false);
+
+  it('ships the registry and a swatch per theme, plus Default', () => {
+    expect(html).toContain('const THEMES =');
+    for (const theme of THEMES) {
+      expect(html, theme.name).toContain(`data-theme-name="${theme.name}"`);
+    }
+    expect(html).toContain('data-theme-name=""'); // the Default swatch resets to no theme
+  });
+
+  it('marks only the Default swatch pressed before any interaction', () => {
+    // The untouched page starts on Default; paintSwatches rewrites all of them
+    // from selectedTheme. (The string also appears in the page CSS, so count
+    // swatch buttons, not raw occurrences.)
+    const swatches = [
+      ...html.matchAll(/<button type="button" class="swatch"[^>]*aria-pressed="([^"]*)"/g),
+    ];
+    expect(swatches).toHaveLength(THEMES.length + 1);
+    expect(swatches.filter((m) => m[1] === 'true')).toHaveLength(1);
+    expect(swatches.filter((m) => m[1] === 'false')).toHaveLength(THEMES.length);
+  });
+
+  it('emits the theme name and only the parameters that differ from its seed', () => {
+    expect(html).toContain("params.set('theme', selectedTheme)");
+    expect(html).toContain('seedOf');
+  });
+
+  it('loads a pasted link into the form so it round-trips', () => {
+    expect(html).toContain('loadFromLocation()');
+  });
+});
+
+describe('the label colour field', () => {
+  const html = renderBuilderPage(false);
+
+  it('exists beside the digit colour', () => {
+    expect(html).toContain('name="label"');
+    expect(html).toContain('id="label"');
+  });
+
+  it('tracks the digit colour until deliberately changed', () => {
+    // The pre-field behaviour — captions followed the digit ink — preserved
+    // for anyone who only picks colours.
+    expect(html).toContain('labelTouched');
+    expect(html).toContain('if (!labelTouched) form.label.value = form.digit.value;');
   });
 });
 

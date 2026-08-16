@@ -4,12 +4,12 @@
  *     pnpm demos          # write assets/*.gif
  *     pnpm demos --check  # verify they are up to date, write nothing
  *
- * These four files used to be produced by hand, which meant the designs behind
- * them existed only inside the GIFs — recovering them to re-render at 2x took
- * decoding the palettes and template-matching the digits. This script exists so
- * that never has to happen again: the designs live here, in the same types the
- * server uses, so `pnpm typecheck` breaks if `CountdownDesign` changes under
- * them.
+ * The demo grid is the theme registry — one GIF per theme, plus the content
+ * exceptions in `CONTENT_OVERRIDES`. The designs used to live only inside the
+ * GIFs (produced by hand), which meant recovering them to re-render at 2x took
+ * decoding the palettes and template-matching the digits. Now they live in
+ * `themes.ts` in the same types the server uses, so `pnpm typecheck` breaks if
+ * `CountdownDesign` changes under them.
  *
  * Rendering goes through `renderCountdown`, the exact path `/c.gif` takes, so a
  * demo cannot drift from what the service actually emits. It is deterministic —
@@ -22,6 +22,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { layoutBoard } from '../raster/layout.js';
 import { DEFAULT_DESIGN, type CountdownDesign } from '../raster/options.js';
+import { THEMES } from '../raster/themes.js';
 import { renderCountdown } from '../service.js';
 
 const ASSETS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'assets');
@@ -44,57 +45,31 @@ export interface Demo {
 }
 
 /**
- * `borderColor` is set on every demo even where `borderWidth` is 0.
+ * Content the demo grid overrides per theme. A theme never decides what is
+ * counted, so the exceptions live here instead of the registry: `minimal`
+ * drops days and captions because its whole point is how little is left.
+ */
+const CONTENT_OVERRIDES: Readonly<Record<string, Partial<CountdownDesign>>> = {
+  minimal: { units: ['hours', 'minutes', 'seconds'], showLabels: false },
+};
+
+/**
+ * `borderColor` is set on every theme even where `borderWidth` is 0.
  *
  * It is not dead: `generateArtifacts` merges all three brand colours into the
  * GIF palette regardless of whether the border is drawn, so leaving it at the
  * default silently spends a palette slot on `#1a1a2e`. That is exactly what the
- * amber demo did, and it is invisible until you diff two colour tables.
+ * amber theme did, and it is invisible until you diff two colour tables.
  */
-export const DEMOS: readonly Demo[] = [
-  {
-    name: 'demo-dark',
-    alt: 'Animated countdown timer for email — dark theme',
-    design: { ...DEFAULT_DESIGN, fontSize: 48 },
+export const DEMOS: readonly Demo[] = THEMES.map((theme) => ({
+  name: `demo-${theme.name}`,
+  alt: theme.description,
+  design: {
+    ...DEFAULT_DESIGN,
+    ...theme.style,
+    ...CONTENT_OVERRIDES[theme.name],
   },
-  {
-    name: 'demo-amber',
-    alt: 'Countdown timer, amber on navy',
-    design: {
-      ...DEFAULT_DESIGN,
-      fontSize: 44,
-      boardBackground: '#0b2a4a',
-      digitColor: '#ffd166',
-      borderColor: '#1a1a2e',
-    },
-  },
-  {
-    name: 'demo-light',
-    alt: 'Countdown timer, light theme with border',
-    design: {
-      ...DEFAULT_DESIGN,
-      fontSize: 44,
-      boardBackground: '#f4f4f5',
-      digitColor: '#18181b',
-      borderColor: '#d4d4d8',
-      borderWidth: 2,
-      dividerStyle: 'dot',
-    },
-  },
-  {
-    name: 'demo-minimal',
-    alt: 'Minimal transparent countdown timer',
-    design: {
-      ...DEFAULT_DESIGN,
-      fontSize: 40,
-      units: ['hours', 'minutes', 'seconds'],
-      showLabels: false,
-      boardBackground: 'transparent',
-      digitColor: '#e11d48',
-      borderColor: '#e11d48',
-    },
-  },
-];
+}));
 
 function main(): void {
   const check = process.argv.includes('--check');

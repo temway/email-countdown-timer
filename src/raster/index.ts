@@ -98,6 +98,7 @@ export function generateArtifacts(design: CountdownDesign): CountdownArtifacts {
     digitsBoxes,
     colors: {
       digit: design.digitColor,
+      label: design.labelColor,
       // The palette cannot represent `'transparent'`; the raster is still drawn
       // with no fill, so this only decides which palette entry gets replaced.
       board:

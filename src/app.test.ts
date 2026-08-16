@@ -42,11 +42,11 @@ describe('/ builder page', () => {
     expect(await (await get('/', on)).text()).toContain('SIGNING_SECRET');
   });
 
-  it('ships both themes and a control to switch between them', async () => {
+  it('ships both page modes and a control to switch between them', async () => {
     const html = await (await get('/')).text();
     expect(html).toContain('[data-theme="light"]');
     expect(html).toContain('[data-theme="dark"]');
-    expect(html).toContain('id="theme"');
+    expect(html).toContain('id="mode"');
     // Persisted, or the choice is lost on every reload.
     expect(html).toContain("localStorage.setItem('ect-theme'");
   });
@@ -176,6 +176,31 @@ describe('validation', () => {
     const res = await get(`/c.gif?until=${encodeURIComponent(FUTURE)}&labelDays=${long}`);
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toMatch(/labelDays/);
+  });
+
+  it('400s an unknown theme, naming the valid ones', async () => {
+    const res = await get(`/c.gif?until=${encodeURIComponent(FUTURE)}&theme=neon`);
+    expect(res.status).toBe(400);
+    const error = ((await res.json()) as { error: string }).error;
+    expect(error).toMatch(/^theme: /);
+    expect(error).toContain('dark');
+  });
+
+  it('renders a themed request end to end', async () => {
+    const res = await get(`/c.gif?until=${encodeURIComponent(FUTURE)}&theme=amber`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/gif');
+    expect(Buffer.from(new Uint8Array(await res.arrayBuffer()).slice(0, 6)).toString('ascii')).toBe(
+      'GIF89a',
+    );
+  });
+
+  it('renders a themed request differently from the default board', async () => {
+    const plain = await get(`/c.gif?until=${encodeURIComponent(FUTURE)}`);
+    const themed = await get(`/c.gif?until=${encodeURIComponent(FUTURE)}&theme=amber`);
+    const a = new Uint8Array(await plain.arrayBuffer());
+    const b = new Uint8Array(await themed.arrayBuffer());
+    expect(Buffer.compare(Buffer.from(a), Buffer.from(b))).not.toBe(0);
   });
 
   it('renders custom captions end to end', async () => {

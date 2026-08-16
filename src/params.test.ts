@@ -83,6 +83,18 @@ describe('colours', () => {
     expect(ok({ board: 'transparent' }).design.boardBackground).toBe('transparent');
     expect(err({ until: UNTIL, digit: 'transparent' })).toMatch(/digit/);
   });
+
+  it('falls back to the digit colour when `label` is absent', () => {
+    expect(ok().design.labelColor).toBe(ok().design.digitColor);
+    // And tracks the digit colour, not the DEFAULT digit colour.
+    expect(ok({ digit: 'AABBCC' }).design.labelColor).toBe('#aabbcc');
+  });
+
+  it('normalises `label` like the other colour params', () => {
+    expect(ok({ label: '969CB3' }).design.labelColor).toBe('#969cb3');
+    expect(ok({ label: '#969CB3' }).design.labelColor).toBe('#969cb3');
+    expect(err({ until: UNTIL, label: 'fff' })).toMatch(/label/);
+  });
 });
 
 describe('units', () => {
@@ -307,6 +319,53 @@ describe('custom captions', () => {
 
   it('accepts markup characters — escaping is the renderer\'s job, not a rejection', () => {
     expect(resolveUnitLabel('days', ok({ labelDays: '<b>&"' }).design.unitLabels)).toBe('<b>&"');
+  });
+});
+
+describe('themes', () => {
+  it('seeds the theme style and nothing else', () => {
+    const { design } = ok({ theme: 'ocean' });
+    expect(design.digitColor).toBe('#e0f2fe');
+    expect(design.labelColor).toBe('#7dd3fc');
+    expect(design.boardBackground).toBe('#082f49');
+    expect(design.fontSize).toBe(44);
+    // Content stays the caller's — a theme never decides what is counted.
+    expect(design.units).toEqual(DEFAULT_DESIGN.units);
+    expect(design.showLabels).toBe(DEFAULT_DESIGN.showLabels);
+    expect(design.scale).toBe(DEFAULT_DESIGN.scale);
+  });
+
+  it('lets an explicit style parameter override the seed', () => {
+    const { design } = ok({ theme: 'ocean', digit: 'ffffff', size: '30' });
+    expect(design.digitColor).toBe('#ffffff');
+    expect(design.fontSize).toBe(30);
+    expect(design.labelColor).toBe('#7dd3fc'); // untouched by the override
+  });
+
+  it('lets an explicit `label` beat the theme label', () => {
+    expect(ok({ theme: 'ocean', label: 'ffffff' }).design.labelColor).toBe('#ffffff');
+  });
+
+  it('combines with content parameters', () => {
+    const { design } = ok({ theme: 'rose', units: 'hours,minutes', labelDays: 'JOURS' });
+    expect(design.units).toEqual(['hours', 'minutes']);
+    expect(design.boardBackground).toBe('#fff1f2');
+  });
+
+  it('resolves the theme case-insensitively', () => {
+    expect(ok({ theme: ' OCEAN ' }).design.digitColor).toBe('#e0f2fe');
+  });
+
+  it('treats an empty theme as absent, so the default applies', () => {
+    expect(ok({ theme: '' }).design).toEqual(DEFAULT_DESIGN);
+  });
+
+  it('rejects an unknown theme, naming the valid ones', () => {
+    const message = err({ until: UNTIL, theme: 'midnight' });
+    expect(message).toMatch(/^theme: /);
+    expect(message).toMatch(/midnight/);
+    expect(message).toContain('dark');
+    expect(message).toContain('slate');
   });
 });
 
