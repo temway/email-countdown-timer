@@ -55,7 +55,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "demos": "tsx src/tools/generate-demos.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",

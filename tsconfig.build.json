@@ -1,4 +1,6 @@
 {
   "extends": "./tsconfig.json",
-  "exclude": ["src/**/*.test.ts", "src/**/__fixtures__/**"]
+  // `src/tools` is build-time tooling for this repo, not part of the shipped
+  // package — but it stays under `src` so `pnpm typecheck` still covers it.
+  "exclude": ["src/**/*.test.ts", "src/**/__fixtures__/**", "src/tools/**"]
 }

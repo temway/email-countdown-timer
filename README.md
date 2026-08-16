@@ -237,15 +237,23 @@ produces identical bytes on your laptop, in CI, and in the container.
 
 ```bash
 pnpm install
-pnpm dev        # tsx watch, http://localhost:8080
-pnpm test       # vitest
+pnpm dev            # tsx watch, http://localhost:8080
+pnpm test           # vitest
 pnpm typecheck
 pnpm build
+pnpm demos          # regenerate the README demo GIFs in assets/
+pnpm demos --check  # verify they are current, write nothing
 ```
 
 The compositor ships with golden-image fixtures — real captured board and digit rasters plus the
 expected GIF and PNG output. Those tests are the contract; if you touch `src/render/`, they must stay
 green.
+
+The demo GIFs above are generated, not hand-made: their designs live in
+[`src/tools/generate-demos.ts`](src/tools/generate-demos.ts) and render through the same
+`renderCountdown` path `/c.gif` uses, pinned to a fixed remaining time so the output is reproducible.
+The script also prints the `<img>` tags with the correct CSS `width` for each. Run `pnpm demos` after
+any change that alters rendered output, or `pnpm demos --check` to find out whether you need to.
 
 ## Licence
 
