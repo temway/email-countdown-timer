@@ -22,6 +22,7 @@ describe('designKey', () => {
   it('is stable regardless of how the object was built', () => {
     const a: CountdownDesign = { ...DEFAULT_DESIGN };
     const b: CountdownDesign = {
+      scale: DEFAULT_DESIGN.scale,
       fontSize: DEFAULT_DESIGN.fontSize,
       shape: DEFAULT_DESIGN.shape,
       dividerStyle: DEFAULT_DESIGN.dividerStyle,
@@ -48,6 +49,7 @@ describe('designKey', () => {
       { dividerStyle: 'dot' },
       { shape: 'rectangle' },
       { fontSize: 49 },
+      { scale: 1 },
     ];
     // Non-vacuity: one entry per field of CountdownDesign.
     expect(variants).toHaveLength(Object.keys(DEFAULT_DESIGN).length);

@@ -109,6 +109,10 @@ export function designKey(design: CountdownDesign): string {
     design.dividerStyle,
     design.shape,
     design.fontSize,
+    // Omitting this would serve a 1x render for a 2x URL — the two designs are
+    // otherwise identical, so they would share an entry and whichever rendered
+    // first would win.
+    design.scale,
   ].join('|');
 }
 

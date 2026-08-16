@@ -7,7 +7,7 @@
  * needed a build step it would rot the first time the toolchain moved.
  */
 
-import { MAX_LABEL_LENGTH } from '../params.js';
+import { MAX_LABEL_LENGTH, MAX_OUTPUT_WIDTH } from '../params.js';
 import { UNIT_LABELS } from '../raster/options.js';
 
 const PAGE_TITLE = 'Countdown timer for email — builder';
@@ -166,7 +166,8 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
   ${signingNotice}
 
   <div class="preview"><img id="preview" alt="Countdown preview"></div>
-  <p class="hint">The preview sits on the page background. Switch themes to check a transparent board against both a light and a dark email.</p>
+  <p class="notice" id="tooWide" hidden>That board is too wide to render — the image may be at most ${MAX_OUTPUT_WIDTH}px, which is 600px on screen at 2&times;. Reduce the digit size, drop a unit, shorten a caption, or untick Retina.</p>
+  <p class="hint">The preview is shown at the size it will occupy in an email, not at its pixel size. It sits on the page background — switch themes to check a transparent board against both a light and a dark email.</p>
 
   <form id="form">
     <div>
@@ -217,6 +218,7 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
         <label><input type="checkbox" name="unit" value="seconds" checked> Seconds</label>
         <label><input type="checkbox" id="labels" checked> Show labels</label>
         <label><input type="checkbox" id="transparent"> Transparent background</label>
+        <label><input type="checkbox" id="retina" checked> Retina (2&times;)</label>
       </div>
     </fieldset>
     <fieldset>
@@ -251,6 +253,8 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
   const urlEl = document.getElementById('url');
   const snippetEl = document.getElementById('snippet');
   const themeBtn = document.getElementById('theme');
+  const retina = document.getElementById('retina');
+  const tooWide = document.getElementById('tooWide');
   const CAPTIONS = ['labelDays', 'labelHours', 'labelMinutes', 'labelSeconds'];
 
   // An action button, not a state toggle: the label names what a click DOES.
@@ -292,6 +296,7 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
     params.set('divider', form.divider.value);
     params.set('shape', form.shape.value);
     params.set('size', form.size.value);
+    params.set('scale', retina.checked ? '2' : '1');
     if (showLabels) {
       // Omitted when blank, so a URL only carries the captions you changed.
       for (const name of CAPTIONS) {
@@ -301,15 +306,27 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
     }
 
     const path = '/c.gif?' + params.toString();
+    tooWide.hidden = true;
     preview.src = path;
     urlEl.textContent = location.origin + path;
     renderSnippet();
   }
 
   function renderSnippet() {
-    // The rendered width, once known — a custom caption can widen the board, so
-    // deriving it from the digit size alone would under-size the <img>.
-    const width = preview.naturalWidth || Math.round(Number(form.size.value) * 7.5);
+    // The CSS width, which is what the <img> must declare — NOT the pixel
+    // width. At scale=2 the file is twice as wide as it should be drawn, so an
+    // <img> carrying the pixel width (or no width at all) renders double size
+    // everywhere. Dividing here is the entire point of rendering at 2x.
+    //
+    // Still read off the loaded image rather than computed from the digit size:
+    // a custom caption can widen the board, so the size alone would under-size it.
+    const scale = retina.checked ? 2 : 1;
+    const width = preview.naturalWidth
+      ? Math.round(preview.naturalWidth / scale)
+      : Math.round(Number(form.size.value) * 7.5);
+    // Show the preview at the size an email will draw it at, not at its pixel
+    // size — otherwise a 2x board looks twice as big here as in the inbox.
+    preview.style.width = width + 'px';
     snippetEl.textContent =
       '<a href="https://example.com/your-offer">\\n' +
       '  <img src="' + urlEl.textContent + '"\\n' +
@@ -318,6 +335,9 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
   }
 
   preview.addEventListener('load', renderSnippet);
+  // A board over the width limit is a 400, which reaches an <img> as a bare
+  // load failure. Say what actually happened instead of showing a broken image.
+  preview.addEventListener('error', () => { tooWide.hidden = false; });
   form.addEventListener('input', build);
   document.querySelectorAll('[data-copy]').forEach((btn) => {
     btn.addEventListener('click', async () => {

@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { renderCountdownGif, type RasterImage } from '../render/compositor.js';
 import { generateArtifacts } from './index.js';
 import { layoutBoard } from './layout.js';
-import { DEFAULT_DESIGN, TRANSPARENT_PALETTE_FALLBACK, type CountdownDesign } from './options.js';
+import {
+  DEFAULT_DESIGN,
+  SCALES,
+  TRANSPARENT_PALETTE_FALLBACK,
+  type CountdownDesign,
+} from './options.js';
 
 function design(overrides: Partial<CountdownDesign> = {}): CountdownDesign {
   return { ...DEFAULT_DESIGN, ...overrides };
@@ -230,12 +235,59 @@ describe('determinism', () => {
 });
 
 describe('raster dimensions match the layout', () => {
-  it('agrees with layoutBoard at every tested size', () => {
-    for (const fontSize of [12, 24, 48, 96, 160]) {
-      const d = design({ fontSize });
-      const { board } = generateArtifacts(d);
-      const layout = layoutBoard(d);
-      expect([board.width, board.height]).toEqual([layout.width, layout.height]);
+  it('agrees with layoutBoard at every tested size and scale', () => {
+    for (const scale of SCALES) {
+      for (const fontSize of [12, 24, 48, 96, 160]) {
+        const d = design({ fontSize, scale });
+        const { board } = generateArtifacts(d);
+        const layout = layoutBoard(d);
+        // The layout is in CSS px, the raster in device px. Exactness matters:
+        // the bounding boxes are scaled by plain multiplication, so a rasteriser
+        // that rounded differently would slide every sprite off its slot.
+        expect([board.width, board.height], `size=${fontSize} scale=${scale}`).toEqual([
+          layout.width * scale,
+          layout.height * scale,
+        ]);
+      }
+    }
+  });
+
+  it('makes a 2x render exactly double a 1x one, boxes included', () => {
+    // Odd layout dimensions are the interesting case — 367x128 must become
+    // 734x256, not 736x256 from a rasteriser rounding up to an even size.
+    const at1 = generateArtifacts(design({ fontSize: 49, scale: 1 }));
+    const at2 = generateArtifacts(design({ fontSize: 49, scale: 2 }));
+
+    expect([at2.board.width, at2.board.height]).toEqual([at1.board.width * 2, at1.board.height * 2]);
+    expect([at2.digits.width, at2.digits.height]).toEqual([
+      at1.digits.width * 2,
+      at1.digits.height * 2,
+    ]);
+
+    expect(at1.boardBoxes.length).toBeGreaterThan(0); // non-vacuity
+    for (const [i, box] of at2.boardBoxes.entries()) {
+      const one = at1.boardBoxes[i];
+      expect(box, one.key).toEqual({
+        key: one.key,
+        x: one.x * 2,
+        y: one.y * 2,
+        width: one.width * 2,
+        height: one.height * 2,
+      });
+    }
+  });
+
+  it('keeps the compositor sprite invariant at every scale', () => {
+    // `renderCountdownGif` centres one sprite on each half-slot, so a sprite
+    // cell must be exactly half a slot or the digits drift. This is what
+    // restricts `scale` to integers — see options.ts.
+    for (const scale of SCALES) {
+      for (const fontSize of [12, 13, 47, 48, 49, 160]) {
+        const { boardBoxes, digitsBoxes } = generateArtifacts(design({ fontSize, scale }));
+        expect(Math.floor(boardBoxes[0].width / 2), `size=${fontSize} scale=${scale}`).toBe(
+          digitsBoxes[0].width,
+        );
+      }
     }
   });
 });

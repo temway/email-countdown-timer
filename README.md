@@ -57,6 +57,11 @@ Then use it in an email:
 </a>
 ```
 
+> **`width` is required.** Images render at 2× by default so they stay sharp on a Retina display, so
+> the file above is 724px wide and must be *declared* at 362 — its width in CSS pixels. Leave `width`
+> off and it draws at double size. The builder always emits the right number; see
+> [Retina rendering](#retina-rendering).
+
 ## URL API
 
 `GET /c.gif` — animated GIF · `GET /c.png` — static first frame, for Outlook
@@ -76,11 +81,41 @@ Then use it in an email:
 | `borderWidth` | `0`                          | `0`–`24` px                                                   |
 | `divider`     | `colon`                      | `colon` · `dot` · `space`                                     |
 | `shape`       | `rounded`                    | `rounded` · `rectangle`                                       |
-| `size`        | `48`                         | Digit size, `12`–`160` px                                     |
+| `size`        | `48`                         | Digit size in CSS px, `12`–`160`                              |
+| `scale`       | `2`                          | Device pixels per CSS px — `1` or `2`. See below              |
 
 Invalid values return `400` with a message naming the field, rather than quietly rendering something
 you did not ask for. Unknown parameters (`utm_source`, `fbclid`) are ignored, because CDNs and email
 clients append them.
+
+### Retina rendering
+
+Most email is read on a 2×-density screen, so the default is `scale=2`: the board is rasterised at
+double resolution and the digits stay sharp instead of being upscaled by the client.
+
+Every other dimension — including `size` — is in **CSS pixels**, and the layout does not change with
+`scale`. Only the file gets bigger. So the rule for the `<img>` tag is:
+
+```
+width = pixel width of the file ÷ scale
+```
+
+At the default that is half the file's width. Get it wrong and the timer draws twice as large as
+intended in every client; the builder at `/` reads the width off the rendered image and does the
+division for you.
+
+**A rendered image may be at most 1200px wide.** An email body is about 600px, which is 1200 device px
+at 2×, past which a larger render buys a recipient nothing. This — not the `size` bound — is the
+constraint you will actually hit, because the board's width also depends on how many units you show
+and how long your captions are. Exceeding it returns `400` naming the width, e.g.:
+
+```
+size: the board renders 2416px wide at scale=2, over the 1200px maximum
+      — reduce size, drop a unit, shorten a caption, or use scale=1
+```
+
+`scale=1` restores the pre-2× behaviour byte for byte, and is the escape hatch if you genuinely want a
+board wider than an email.
 
 ### Custom captions
 

@@ -55,12 +55,18 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
  * duration on every request and the render-cache key stays constant instead of
  * minting a fresh bucket per scrape.
  *
+ * `scale` is pinned to 1 rather than inherited from `DEFAULT_DESIGN`. A social
+ * card is not an email: a scraper wants 1208 px of card, not a 2416 px file to
+ * downscale. Pinning it also means this route never has to satisfy the
+ * `MAX_OUTPUT_WIDTH` rule in params.ts, which the same design would fail at 2x —
+ * it is constructed here, not parsed, so that rule never sees it.
+ *
  * The odd `13s` is deliberate: it puts the duration mid-bucket. On an exact
  * 20-second boundary a sub-millisecond difference between reading the clock and
  * subtracting it would land either side of `Math.floor`, and the card would
  * re-render at full size on roughly half of all requests.
  */
-const OG_DESIGN = { ...DEFAULT_DESIGN, fontSize: 160 };
+const OG_DESIGN = { ...DEFAULT_DESIGN, fontSize: 160, scale: 1 } as const;
 const OG_REMAINING_MS = 3 * 86_400_000 + 7 * 3_600_000 + 42 * 60_000 + 13_000;
 
 export function createApp(config: Config = loadConfig()): Hono {

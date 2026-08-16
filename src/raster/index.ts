@@ -17,7 +17,7 @@ import { PNG } from 'pngjs';
 import type { BoundingBox, CountdownColors, RasterImage } from '../render/compositor.js';
 import { getFontFamily, getFontPath } from './fonts.js';
 import { layoutBoard, layoutDigitSheet } from './layout.js';
-import { TRANSPARENT_PALETTE_FALLBACK, type CountdownDesign } from './options.js';
+import { TRANSPARENT_PALETTE_FALLBACK, type CountdownDesign, type Scale } from './options.js';
 import { buildBoardSvg, buildDigitsSvg } from './svg.js';
 
 /** The complete input set for one `renderCountdownGif` call. */
@@ -30,8 +30,16 @@ export interface CountdownArtifacts {
   readonly colors: CountdownColors;
 }
 
-/** Render an SVG string to a decoded RGBA raster. */
-function rasterise(svg: string): RasterImage {
+/**
+ * Render an SVG string to a decoded RGBA raster, `scale` device px per CSS px.
+ *
+ * The zoom happens in the RASTERISER, not in the SVG: glyph outlines are filled
+ * at the target resolution, so a 2x render is genuinely sharper rather than an
+ * upscale of a 1x one. Output is exactly `scale` times the document's px size
+ * for integer scales, which is what lets the bounding boxes below be scaled by
+ * plain multiplication.
+ */
+function rasterise(svg: string, scale: Scale): RasterImage {
   const resvg = new Resvg(svg, {
     font: {
       fontFiles: [getFontPath()],
@@ -39,6 +47,7 @@ function rasterise(svg: string): RasterImage {
       // Determinism: never let a host font participate. See fonts.ts.
       loadSystemFonts: false,
     },
+    fitTo: { mode: 'zoom', value: scale },
   });
 
   const png = PNG.sync.read(Buffer.from(resvg.render().asPng()));
@@ -57,23 +66,29 @@ export function generateArtifacts(design: CountdownDesign): CountdownArtifacts {
   const boardLayout = layoutBoard(design);
   const sheetLayout = layoutDigitSheet(design.fontSize);
 
-  const board = rasterise(buildBoardSvg(design, boardLayout));
-  const digits = rasterise(buildDigitsSvg(design, sheetLayout));
+  // The layout is in CSS px; the rasters are in device px. Every box handed to
+  // the compositor must be in the SAME space as the pixels it indexes into, so
+  // both are scaled here rather than anywhere in `layout.ts` — which keeps the
+  // geometry (and its tests) independent of the output resolution.
+  const s = design.scale;
+
+  const board = rasterise(buildBoardSvg(design, boardLayout), s);
+  const digits = rasterise(buildDigitsSvg(design, sheetLayout), s);
 
   const boardBoxes: BoundingBox[] = boardLayout.slots.map((slot) => ({
     key: slot.key,
-    x: slot.x,
-    y: slot.y,
-    width: slot.width,
-    height: slot.height,
+    x: slot.x * s,
+    y: slot.y * s,
+    width: slot.width * s,
+    height: slot.height * s,
   }));
 
   const digitsBoxes: BoundingBox[] = sheetLayout.cells.map((cell) => ({
     key: cell.key,
-    x: cell.x,
-    y: cell.y,
-    width: cell.width,
-    height: cell.height,
+    x: cell.x * s,
+    y: cell.y * s,
+    width: cell.width * s,
+    height: cell.height * s,
   }));
 
   return {

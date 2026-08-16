@@ -13,12 +13,14 @@
  */
 
 import { z } from 'zod';
+import { layoutBoard } from './raster/layout.js';
 import {
   DEFAULT_DESIGN,
   DIVIDER_STYLES,
   SHAPES,
   UNIT_NAMES,
   type CountdownDesign,
+  type Scale,
   type UnitLabelOverrides,
   type UnitName,
 } from './raster/options.js';
@@ -26,6 +28,18 @@ import {
 /** Font size bounds. The upper bound caps a single render's raster area. */
 export const MIN_FONT_SIZE = 12;
 export const MAX_FONT_SIZE = 160;
+
+/**
+ * Widest image this service will emit, in DEVICE pixels.
+ *
+ * An email body is ~600px wide, and at the default `scale=2` that is 1200
+ * device px — past which a bigger render buys a recipient nothing and costs
+ * everyone else CPU. It is the binding size constraint, not {@link MAX_FONT_SIZE}:
+ * the board's width depends on the unit count and the caption lengths as well
+ * as the font size, so no bound on `size` alone can express it. `MAX_FONT_SIZE`
+ * survives as a cheap gate that rejects the absurd before the layout runs.
+ */
+export const MAX_OUTPUT_WIDTH = 1200;
 
 /** Border thickness bounds. */
 const MAX_BORDER_WIDTH = 24;
@@ -140,6 +154,12 @@ export const countdownParamsSchema = z.object({
     .min(MIN_FONT_SIZE)
     .max(MAX_FONT_SIZE)
     .default(DEFAULT_DESIGN.fontSize),
+  // An enum rather than a bounded number, so `scale=1.5` and `scale=3` are
+  // rejected by the same rule instead of one being coerced and the other not.
+  scale: z
+    .enum(['1', '2'])
+    .transform((v) => Number(v) as Scale)
+    .default(String(DEFAULT_DESIGN.scale) as '1' | '2'),
 });
 
 export interface ParsedCountdown {
@@ -180,22 +200,34 @@ export function parseCountdownParams(query: Record<string, string | undefined>):
   if (p.labelMinutes) unitLabels.minutes = p.labelMinutes;
   if (p.labelSeconds) unitLabels.seconds = p.labelSeconds;
 
-  return {
-    ok: true,
-    value: {
-      endsAt: p.until,
-      design: {
-        units: p.units,
-        showLabels: p.labels,
-        unitLabels: unitLabels as UnitLabelOverrides,
-        digitColor: p.digit,
-        boardBackground: p.board,
-        borderColor: p.border,
-        borderWidth: p.borderWidth,
-        dividerStyle: p.divider,
-        shape: p.shape,
-        fontSize: p.size,
-      },
-    },
+  const design: CountdownDesign = {
+    units: p.units,
+    showLabels: p.labels,
+    unitLabels: unitLabels as UnitLabelOverrides,
+    digitColor: p.digit,
+    boardBackground: p.board,
+    borderColor: p.border,
+    borderWidth: p.borderWidth,
+    dividerStyle: p.divider,
+    shape: p.shape,
+    fontSize: p.size,
+    scale: p.scale,
   };
+
+  // The real size guard, and the only one that can see the finished board. It
+  // runs after zod because it needs the assembled design: font size, unit count
+  // and caption lengths all feed the width. `layoutBoard` is pure arithmetic —
+  // no rasteriser, no allocation worth counting — so running it to decide
+  // whether to reject is cheaper than the render it prevents.
+  const outputWidth = layoutBoard(design).width * design.scale;
+  if (outputWidth > MAX_OUTPUT_WIDTH) {
+    return {
+      ok: false,
+      error:
+        `size: the board renders ${outputWidth}px wide at scale=${design.scale}, over the ${MAX_OUTPUT_WIDTH}px maximum` +
+        ' — reduce size, drop a unit, shorten a caption, or use scale=1',
+    };
+  }
+
+  return { ok: true, value: { endsAt: p.until, design } };
 }

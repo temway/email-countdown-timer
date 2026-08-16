@@ -44,6 +44,19 @@ export const SHAPES = ['rectangle', 'rounded'] as const;
 export type Shape = (typeof SHAPES)[number];
 
 /**
+ * Device pixels per CSS pixel.
+ *
+ * Restricted to integers, and to these two in particular. The layout is always
+ * in CSS px and the compositor's bounding boxes are multiplied through by this
+ * factor, which preserves the `floor(slot.width / 2) === cell.width` invariant
+ * (see `layout.ts`) exactly — a slot is `2 * advance` and a cell is `advance`,
+ * so scaling both by an integer keeps the relation. A fractional factor would
+ * round the two independently and drift the sprites off their half-slots.
+ */
+export const SCALES = [1, 2] as const;
+export type Scale = (typeof SCALES)[number];
+
+/**
  * `'transparent'` is a first-class board background, not an edge case: the
  * compositor keys its GIF transparency flag off whether the board raster
  * contains any fully-transparent pixels (`boardHasTransparency`), so a
@@ -75,8 +88,18 @@ export interface CountdownDesign {
   readonly borderWidth: number;
   readonly dividerStyle: DividerStyle;
   readonly shape: Shape;
-  /** Digit font size in px. Drives every other dimension. */
+  /** Digit font size in CSS px. Drives every other dimension. */
   readonly fontSize: number;
+  /**
+   * Device pixels per CSS px. `2` rasterises at double resolution so the image
+   * stays sharp on a Retina display, which is what most mail gets read on.
+   *
+   * This does NOT change the layout: every number in `layout.ts` stays in CSS
+   * px and only the rasteriser and the bounding boxes are scaled. So the width
+   * an `<img>` tag should declare is always `layoutBoard(design).width`, and
+   * the file is `scale` times wider than that.
+   */
+  readonly scale: Scale;
 }
 
 export const DEFAULT_DESIGN: CountdownDesign = {
@@ -90,6 +113,7 @@ export const DEFAULT_DESIGN: CountdownDesign = {
   dividerStyle: 'colon',
   shape: 'rounded',
   fontSize: 48,
+  scale: 2,
 };
 
 /**

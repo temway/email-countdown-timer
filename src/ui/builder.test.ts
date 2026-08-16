@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_LABEL_LENGTH, unitLabelParam } from '../params.js';
+import { MAX_LABEL_LENGTH, MAX_OUTPUT_WIDTH, unitLabelParam } from '../params.js';
 import { UNIT_LABELS, UNIT_NAMES } from '../raster/options.js';
 import { renderBuilderPage } from './builder.js';
 
@@ -30,6 +30,28 @@ describe('the inline scripts are valid JavaScript', () => {
     // A `${...}` that survives into the output means an interpolation was
     // escaped by accident and the page is showing source code.
     expect(renderBuilderPage(false)).not.toMatch(/\$\{/);
+  });
+});
+
+describe('the snippet carries a CSS width, not a pixel width', () => {
+  const html = renderBuilderPage(false);
+
+  it('offers the Retina control that drives `scale`', () => {
+    expect(html).toContain('id="retina"');
+    expect(html).toContain("params.set('scale', retina.checked ? '2' : '1')");
+  });
+
+  it('divides the loaded pixel width by the scale', () => {
+    // The whole point of rendering at 2x: an <img> declaring the PIXEL width
+    // (or no width) draws double size in every client. If this ever regresses
+    // the images still render, they are just twice as big — which is exactly
+    // the kind of break nobody notices until it is in a sent campaign.
+    expect(html).toContain('preview.naturalWidth / scale');
+  });
+
+  it('tells the reader why a too-wide board fails to preview', () => {
+    expect(html).toContain('id="tooWide"');
+    expect(html).toContain(`${MAX_OUTPUT_WIDTH}px`);
   });
 });
 

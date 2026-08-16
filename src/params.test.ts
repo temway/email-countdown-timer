@@ -2,14 +2,17 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_FONT_SIZE,
   MAX_LABEL_LENGTH,
+  MAX_OUTPUT_WIDTH,
   MIN_FONT_SIZE,
   countdownParamsSchema,
   parseCountdownParams,
   unitLabelParam,
 } from './params.js';
+import { layoutBoard } from './raster/layout.js';
 import {
   DEFAULT_DESIGN,
   DIVIDER_STYLES,
+  SCALES,
   SHAPES,
   UNIT_LABELS,
   UNIT_NAMES,
@@ -123,7 +126,12 @@ describe('clamping — these are DoS guards, not style preferences', () => {
 
   it('accepts the exact bounds', () => {
     expect(ok({ size: String(MIN_FONT_SIZE) }).design.fontSize).toBe(MIN_FONT_SIZE);
-    expect(ok({ size: String(MAX_FONT_SIZE) }).design.fontSize).toBe(MAX_FONT_SIZE);
+    // The largest font size only fits inside MAX_OUTPUT_WIDTH on a narrow board
+    // — four units at 160px are 1208 CSS px wide, over the limit at any scale.
+    // That is the width rule doing its job, not a font-size bound.
+    expect(
+      ok({ size: String(MAX_FONT_SIZE), units: 'minutes,seconds', scale: '1' }).design.fontSize,
+    ).toBe(MAX_FONT_SIZE);
   });
 
   it('rejects a non-integer or absurd size', () => {
@@ -134,6 +142,77 @@ describe('clamping — these are DoS guards, not style preferences', () => {
   it('bounds border width', () => {
     expect(err({ until: UNTIL, borderWidth: '999' })).toMatch(/borderWidth/);
     expect(err({ until: UNTIL, borderWidth: '-1' })).toMatch(/borderWidth/);
+  });
+});
+
+describe('scale', () => {
+  it('defaults to 2, so the image is Retina without asking', () => {
+    expect(ok().design.scale).toBe(2);
+    expect(DEFAULT_DESIGN.scale).toBe(2);
+  });
+
+  it('accepts every documented scale', () => {
+    expect(SCALES.length).toBeGreaterThan(0); // non-vacuity
+    for (const scale of SCALES) {
+      expect(ok({ scale: String(scale) }).design.scale, String(scale)).toBe(scale);
+    }
+  });
+
+  it('rejects a scale that is not one of them', () => {
+    // A fractional scale would round the slot and sprite widths independently
+    // and slide the digits off their half-slots — see options.ts.
+    for (const bad of ['0', '3', '1.5', '2x', '-1']) {
+      expect(err({ until: UNTIL, scale: bad }), bad).toMatch(/scale/);
+    }
+  });
+});
+
+describe('output width — the binding size guard', () => {
+  /** The widest four-unit board that still fits, found the way params.ts checks. */
+  function widestFontSize(scale: number): number {
+    let last = MIN_FONT_SIZE;
+    for (let size = MIN_FONT_SIZE; size <= MAX_FONT_SIZE; size++) {
+      const design = { ...DEFAULT_DESIGN, fontSize: size };
+      if (layoutBoard(design).width * scale <= MAX_OUTPUT_WIDTH) last = size;
+    }
+    return last;
+  }
+
+  it('accepts the widest board that fits and rejects the next one up', () => {
+    const fits = widestFontSize(2);
+    expect(layoutBoard({ ...DEFAULT_DESIGN, fontSize: fits }).width * 2).toBeLessThanOrEqual(
+      MAX_OUTPUT_WIDTH,
+    );
+    expect(ok({ size: String(fits) }).design.fontSize).toBe(fits);
+    expect(err({ until: UNTIL, size: String(fits + 1) })).toMatch(/1200px maximum/);
+  });
+
+  it('names the actual width and offers a way out', () => {
+    const message = err({ until: UNTIL, size: String(MAX_FONT_SIZE) });
+    expect(message).toMatch(/2416px wide at scale=2/);
+    expect(message).toMatch(/scale=1/);
+  });
+
+  it('lets scale=1 render a board that is too wide at 2x', () => {
+    const tooWideAt2x = widestFontSize(2) + 1;
+    expect(err({ until: UNTIL, size: String(tooWideAt2x) })).toMatch(/maximum/);
+    expect(ok({ size: String(tooWideAt2x), scale: '1' }).design.fontSize).toBe(tooWideAt2x);
+  });
+
+  it('counts a long caption, not just the font size', () => {
+    // A caption wider than its slot widens the board, so two designs with the
+    // same `size` can land either side of the limit. A bound on `size` alone
+    // could not see this.
+    const size = String(widestFontSize(2));
+    expect(ok({ size }).design.fontSize).toBe(Number(size));
+    expect(err({ until: UNTIL, size, labelDays: 'SEKUNDENXXXX' })).toMatch(/maximum/);
+  });
+
+  it('rejects rather than silently downscaling', () => {
+    // Same reasoning as the font-size bound: a caller who asked for scale=2 and
+    // quietly got scale=1 would put the wrong width= in an email they cannot
+    // recall. See the `clamping` block above.
+    expect(parse({ size: String(MAX_FONT_SIZE) }).ok).toBe(false);
   });
 });
 
