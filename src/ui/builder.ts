@@ -7,8 +7,15 @@
  * needed a build step it would rot the first time the toolchain moved.
  */
 
-import { MAX_LABEL_LENGTH, MAX_OUTPUT_WIDTH } from '../params.js';
-import { UNIT_LABELS } from '../raster/options.js';
+import {
+  MAX_BORDER_WIDTH,
+  MAX_FONT_SIZE,
+  MAX_LABEL_LENGTH,
+  MAX_OUTPUT_WIDTH,
+  MIN_FONT_SIZE,
+} from '../params.js';
+import { DEFAULT_DESIGN, UNIT_LABELS } from '../raster/options.js';
+import { boardCssWidth } from './board-width.js';
 
 const PAGE_TITLE = 'Countdown timer for email — builder';
 const PAGE_DESCRIPTION =
@@ -120,6 +127,7 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
   }
   .preview img { max-width: 100%; }
   .hint { color: var(--muted); font-size: 0.82rem; margin: 0 0 24px; }
+  .fieldHint { display: block; color: var(--muted); font-size: 0.75rem; margin-top: 4px; }
   form {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 16px; background: var(--panel); border: 1px solid var(--line);
@@ -168,7 +176,8 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
   ${signingNotice}
 
   <div class="preview"><img id="preview" alt="Countdown preview"></div>
-  <p class="notice" id="tooWide" hidden>That board is too wide to render — the image may be at most ${MAX_OUTPUT_WIDTH}px, which is 600px on screen at 2&times;. Reduce the digit size, drop a unit, shorten a caption, or untick Retina.</p>
+  <p class="notice" id="tooWide" aria-live="polite" hidden>That board is too wide to render — the image may be at most ${MAX_OUTPUT_WIDTH}px, which is 600px on screen at 2&times;. Reduce the digit size, drop a unit, shorten a caption, or untick Retina.</p>
+  <p class="notice" id="previewError" aria-live="polite" hidden></p>
   <p class="hint">The preview is shown at the size it will occupy in an email, not at its pixel size. It sits on the page background — switch themes to check a transparent board against both a light and a dark email.</p>
 
   <form id="form">
@@ -179,6 +188,7 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
     <div>
       <label for="size">Digit size</label>
       <input type="number" id="size" name="size" value="48" min="12" max="160">
+      <span class="fieldHint" id="sizeMax"></span>
     </div>
     <div>
       <label for="divider">Divider</label>
@@ -256,6 +266,10 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
 </main>
 
 <script>
+${boardCssWidth.toString()}
+</script>
+
+<script>
   const form = document.getElementById('form');
   const preview = document.getElementById('preview');
   const urlEl = document.getElementById('url');
@@ -263,7 +277,23 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
   const themeBtn = document.getElementById('theme');
   const retina = document.getElementById('retina');
   const tooWide = document.getElementById('tooWide');
+  const previewError = document.getElementById('previewError');
+  const sizeInput = document.getElementById('size');
+  const sizeMaxEl = document.getElementById('sizeMax');
+  const untilField = document.getElementById('until');
   const CAPTIONS = ['labelDays', 'labelHours', 'labelMinutes', 'labelSeconds'];
+  const DEFAULT_LABELS = ${JSON.stringify(UNIT_LABELS)};
+
+  // What to say when a load fails and the server cannot name the reason either.
+  const LOAD_FAILURE = 'The preview failed to load. Check the connection, then change any setting to retry.';
+
+  // The URL the preview was last pointed at — the error handler asks the server
+  // about exactly this path, and only a build that requested can fail.
+  let requestedPath = null;
+
+  // Board width in CSS px per the last build(), from the same arithmetic the
+  // server runs. Stand-in for the image's own width until one has loaded.
+  let predictedCssWidth = 0;
 
   // An action button, not a state toggle: the label names what a click DOES.
   // An aria-pressed on top of a changing label announces the opposite state as
@@ -282,29 +312,102 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
 
   paintThemeButton();
 
-  // Default to one week out, rounded to the hour.
+  // Default to one week out, rounded to the hour. The ISO string is kept
+  // separately from the field: some mobile engines silently discard a value
+  // set on a datetime-local input, and reading the field back then dropped
+  // until from the first URL — which 400'd and was apologised for as a width
+  // problem. The captured value fills the gap; the field is never written
+  // back to, because fighting the platform was the original bug.
   const soon = new Date(Date.now() + 7 * 864e5);
   soon.setUTCMinutes(0, 0, 0);
-  document.getElementById('until').value = soon.toISOString().slice(0, 16);
+  const defaultUntil = soon.toISOString();
+  untilField.value = soon.toISOString().slice(0, 16);
+  let untilTouched = false;
+  untilField.addEventListener('input', () => { untilTouched = true; });
+
+  function showLoadFailure(message) {
+    previewError.textContent = message;
+    previewError.hidden = false;
+  }
 
   function build() {
     const showLabels = document.getElementById('labels').checked;
     for (const name of CAPTIONS) form[name].disabled = !showLabels;
 
     const units = [...document.querySelectorAll('input[name=unit]:checked')].map((el) => el.value);
+    const scale = retina.checked ? 2 : 1;
+
+    // An empty size or border field is omitted from the URL below and the
+    // server's defaults apply — predict with those same defaults, so clearing
+    // a field to retype it never flashes an error.
+    const sizeRaw = sizeInput.value;
+    const size = sizeRaw === '' ? ${DEFAULT_DESIGN.fontSize} : Number(sizeRaw);
+    const bwRaw = form.borderWidth.value;
+    const borderWidth = bwRaw === '' ? 0 : Number(bwRaw);
+
+    // The caption list the prediction needs: the default where a field is
+    // blank (the server's rule for blanks), and EMPTY with labels off — the
+    // contract boardCssWidth is built around.
+    const labelTexts = showLabels
+      ? units.map((u) => form['label' + u.charAt(0).toUpperCase() + u.slice(1)].value.trim() || DEFAULT_LABELS[u])
+      : [];
+
+    // Predict with the server's own arithmetic, and publish the live ceiling
+    // at the input: on a phone the notice under the preview is off-screen
+    // while the form is being edited. The input's max only steers spinners
+    // and validation — the typed value is never rewritten underneath anyone.
+    const slotUnitCount = Math.max(1, units.length);
+    predictedCssWidth = boardCssWidth(size, slotUnitCount, labelTexts, form.divider.value, borderWidth);
+    let maxFit = 0;
+    for (let s = ${MAX_FONT_SIZE}; s >= ${MIN_FONT_SIZE}; s--) {
+      if (boardCssWidth(s, slotUnitCount, labelTexts, form.divider.value, borderWidth) * scale <= ${MAX_OUTPUT_WIDTH}) {
+        maxFit = s;
+        break;
+      }
+    }
+    sizeInput.max = String(maxFit);
+    sizeMaxEl.textContent = maxFit
+      ? 'max ' + maxFit + ' at ' + scale + '× with ' + units.length + (units.length === 1 ? ' unit' : ' units')
+      : 'no digit size fits this setup — untick Retina or drop a unit';
+
+    // Every state the client KNOWS the server would reject (or silently fix
+    // against what the checkboxes say) is caught here, in the order a person
+    // would read the form — none of them should cost a round trip to discover.
+    let blocked = null;
+    let untilIso = null;
+    const untilRaw = untilField.value;
+    if (untilRaw) {
+      const ms = Date.parse(untilRaw + 'Z');
+      if (Number.isNaN(ms)) blocked = 'That end date is not valid — pick one from the calendar.';
+      else untilIso = new Date(ms).toISOString();
+    } else if (!untilTouched) {
+      untilIso = defaultUntil;
+    } else {
+      blocked = 'Pick an end date to preview the timer.';
+    }
+    if (!blocked && !units.length) blocked = 'Tick at least one unit to preview the timer.';
+    if (!blocked && (!Number.isInteger(size) || size < ${MIN_FONT_SIZE} || size > ${MAX_FONT_SIZE}))
+      blocked = 'Digit size must be a whole number from ${MIN_FONT_SIZE} to ${MAX_FONT_SIZE}.';
+    if (!blocked && (!Number.isInteger(borderWidth) || borderWidth < 0 || borderWidth > ${MAX_BORDER_WIDTH}))
+      blocked = 'Border width must be a whole number from 0 to ${MAX_BORDER_WIDTH}.';
+
+    const deviceWidth = predictedCssWidth * scale;
+    if (!blocked && deviceWidth > ${MAX_OUTPUT_WIDTH}) blocked = 'width';
+
+    // The URL always mirrors the form — it is copyable from a blocked state
+    // too, with the notice saying plainly that it will not render yet.
     const params = new URLSearchParams();
-    const untilRaw = document.getElementById('until').value;
-    if (untilRaw) params.set('until', new Date(untilRaw + 'Z').toISOString());
+    if (untilIso) params.set('until', untilIso);
     if (units.length) params.set('units', units.join(','));
     params.set('labels', showLabels ? '1' : '0');
     params.set('digit', form.digit.value.replace('#', ''));
     params.set('board', document.getElementById('transparent').checked ? 'transparent' : form.board.value.replace('#', ''));
     params.set('border', form.border.value.replace('#', ''));
-    params.set('borderWidth', form.borderWidth.value);
+    params.set('borderWidth', bwRaw);
     params.set('divider', form.divider.value);
     params.set('shape', form.shape.value);
-    params.set('size', form.size.value);
-    params.set('scale', retina.checked ? '2' : '1');
+    params.set('size', sizeRaw);
+    params.set('scale', String(scale));
     if (showLabels) {
       // Omitted when blank, so a URL only carries the captions you changed.
       for (const name of CAPTIONS) {
@@ -312,11 +415,24 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
         if (value) params.set(name, value);
       }
     }
-
     const path = '/c.gif?' + params.toString();
-    tooWide.hidden = true;
-    preview.src = path;
     urlEl.textContent = location.origin + path;
+
+    if (blocked === 'width') {
+      tooWide.textContent = maxFit
+        ? 'That board would render ' + deviceWidth + 'px wide at ' + scale + '× — over the ' + ${MAX_OUTPUT_WIDTH} + 'px maximum. Largest digit size that fits: ' + maxFit + '. Take it, drop a unit, shorten a caption, or untick Retina.'
+        : 'That board would render ' + deviceWidth + 'px wide at ' + scale + '× — over the ' + ${MAX_OUTPUT_WIDTH} + 'px maximum, and no digit size fits with these units and captions. Untick Retina, drop a unit, or shorten a caption.';
+      tooWide.hidden = false;
+      previewError.hidden = true;
+    } else if (blocked) {
+      showLoadFailure(blocked);
+      tooWide.hidden = true;
+    } else {
+      tooWide.hidden = true;
+      previewError.hidden = true;
+      requestedPath = path;
+      preview.src = path; // the only line that moves the preview — a blocked build keeps the last good one
+    }
     renderSnippet();
   }
 
@@ -326,12 +442,13 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
     // <img> carrying the pixel width (or no width at all) renders double size
     // everywhere. Dividing here is the entire point of rendering at 2x.
     //
-    // Still read off the loaded image rather than computed from the digit size:
-    // a custom caption can widen the board, so the size alone would under-size it.
+    // The loaded image stays the authority (ground truth beats prediction);
+    // until one has loaded, the predicted width stands in — it knows about
+    // captions, where the old size-times-7.5 guess did not.
     const scale = retina.checked ? 2 : 1;
     const width = preview.naturalWidth
       ? Math.round(preview.naturalWidth / scale)
-      : Math.round(Number(form.size.value) * 7.5);
+      : Math.round(predictedCssWidth);
     // Show the preview at the size an email will draw it at, not at its pixel
     // size — otherwise a 2x board looks twice as big here as in the inbox.
     preview.style.width = width + 'px';
@@ -343,9 +460,23 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
   }
 
   preview.addEventListener('load', renderSnippet);
-  // A board over the width limit is a 400, which reaches an <img> as a bare
-  // load failure. Say what actually happened instead of showing a broken image.
-  preview.addEventListener('error', () => { tooWide.hidden = false; });
+  // A failed load used to show the too-wide apology unconditionally — which is
+  // how a missing until on a phone read as a width problem. Now the client
+  // only requests URLs it has predicted valid, so a failure here means either
+  // the server knows something the prediction does not (ask it, and show its
+  // message verbatim — it names real pixel widths and signing errors) or
+  // nobody knows (a network failure) — and width is never assumed.
+  preview.addEventListener('error', () => {
+    if (!requestedPath) return;
+    fetch(requestedPath)
+      .then((r) =>
+        r.json().then(
+          (body) => showLoadFailure(body && body.error ? body.error : LOAD_FAILURE),
+          () => showLoadFailure(LOAD_FAILURE),
+        ),
+      )
+      .catch(() => showLoadFailure(LOAD_FAILURE));
+  });
   form.addEventListener('input', build);
   document.querySelectorAll('[data-copy]').forEach((btn) => {
     btn.addEventListener('click', async () => {

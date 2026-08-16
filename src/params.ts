@@ -41,8 +41,8 @@ export const MAX_FONT_SIZE = 160;
  */
 export const MAX_OUTPUT_WIDTH = 1200;
 
-/** Border thickness bounds. */
-const MAX_BORDER_WIDTH = 24;
+/** Border thickness bounds. Exported for the builder, which mirrors the bound client-side. */
+export const MAX_BORDER_WIDTH = 24;
 
 /**
  * Longest custom unit caption, in characters.
