@@ -44,6 +44,15 @@ export {
 } from './raster/options.js';
 export { getFontFamily, getFontPath, resetFont, setFont } from './raster/fonts.js';
 export {
+  THEMES,
+  THEME_NAMES,
+  findTheme,
+  themeDesign,
+  themeQuerySeed,
+  type Theme,
+  type ThemeStyle,
+} from './raster/themes.js';
+export {
   renderCountdownGif,
   type BoundingBox,
   type CountdownColors,

@@ -82,7 +82,9 @@ Then use it in an email:
 | `labelHours`  | `HRS`                        | Custom caption                                                |
 | `labelMinutes`| `MIN`                        | Custom caption                                                |
 | `labelSeconds`| `SEC`                        | Custom caption                                                |
+| `theme`       | _(none)_                     | Named look seeding the style params — see below             |
 | `digit`       | `ffffff`                     | 6-digit hex, with or without `#`                              |
+| `label`       | _same as `digit`_            | Caption ink — digits and dividers keep `digit`              |
 | `board`       | `1a1a2e`                     | 6-digit hex, or `transparent`                                 |
 | `border`      | `1a1a2e`                     | 6-digit hex                                                   |
 | `borderWidth` | `0`                          | `0`–`24` px                                                   |
@@ -147,6 +149,37 @@ import { setFont } from 'email-countdown-timer';
 setFont('/fonts/NotoSansSC-Regular.ttf', 'Noto Sans SC');
 ```
 
+### Themes
+
+`theme` seeds all eight style parameters at once, so a whole look is one short parameter instead of a
+wall of hex codes:
+
+```
+/c.gif?until=2026-12-25T00:00:00Z&theme=ocean
+```
+
+Every explicit style parameter still wins — `?theme=amber&digit=ffffff` is amber with white digits.
+Themes never touch content: `until`, `units`, `labels` and the captions stay yours.
+
+| Name      | Look                                                        |
+| --------- | ----------------------------------------------------------- |
+| `dark`    | White digits on deep navy — the default look                |
+| `amber`   | Warm amber digits on ocean navy                             |
+| `light`   | Near-black digits on a light card with a soft border        |
+| `minimal` | Bare rose digits, no board — sits on the email itself       |
+| `ocean`   | Ice-blue digits, misted captions, midnight-teal board       |
+| `forest`  | Mint digits, pine captions, deep-green board                |
+| `rose`    | Crimson digits on blush, dotted dividers                    |
+| `slate`   | Ink digits on a transparent board with a silver rule        |
+
+The builder at `/` has a swatch for each one; picking it collapses the URL to `theme=<name>` plus
+whatever you changed.
+
+One durability note: a theme URL pins the **name**, not the values. If a registry entry is retuned,
+every URL referencing that theme re-renders with the new look on its next fetch — the accepted trade
+for keeping URLs short. Pin values the long way (write every style parameter explicitly) and they
+can never move.
+
 ### Always pair the GIF with the PNG
 
 Outlook on Windows renders only the first frame of a GIF. That first frame is the *blank board*, so
@@ -186,12 +219,26 @@ const { gif, png } = renderCountdown(
   {
     ...DEFAULT_DESIGN,
     digitColor: '#ffd166',
+    labelColor: '#c8a04e', // captions — defaults to the digit colour when omitted
     boardBackground: '#0b2a4a',
     unitLabels: { days: 'TAGE', hours: 'STD', seconds: 'SEK' }, // minutes keeps MIN
   },
   Date.parse('2026-12-25T00:00:00Z'),
   Date.now(),
 );
+```
+
+`labelColor` is a required field on `CountdownDesign` (TypeScript-level breaking change if you build
+the object by hand rather than spreading `DEFAULT_DESIGN`); at the URL level `label` is optional and
+falls back to `digit`. The theme registry is exported too — `THEMES`, `findTheme` and
+`themeQuerySeed` — so the same named looks the server serves are available to library callers:
+
+```ts
+import { renderCountdown, THEMES, themeDesign } from 'email-countdown-timer';
+
+for (const theme of THEMES) {
+  const { gif } = renderCountdown(themeDesign(theme), endsAt, Date.now());
+}
 ```
 
 The compositor is also exposed on its own. It takes decoded RGBA rasters and bounding boxes and knows
