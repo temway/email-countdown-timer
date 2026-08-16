@@ -15,6 +15,7 @@ import {
   MIN_FONT_SIZE,
 } from '../params.js';
 import { DEFAULT_DESIGN, UNIT_LABELS } from '../raster/options.js';
+import { THEMES, THEME_STYLE_PARAMS, themeQuerySeed } from '../raster/themes.js';
 import { boardCssWidth } from './board-width.js';
 
 const PAGE_TITLE = 'Countdown timer for email — builder';
@@ -26,6 +27,56 @@ const PAGE_DESCRIPTION =
  *  debug. */
 function escapeAttr(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * The default style as query-param strings — the same shape `themeQuerySeed`
+ * emits for a theme, so the page's diffing code treats "no theme" and "theme"
+ * with one code path. Built here rather than exported from themes.ts because
+ * `DEFAULT_DESIGN` is not a Theme.
+ */
+function defaultStyleSeed(): Record<string, string> {
+  const seed: Record<string, string> = {};
+  for (const [key, param] of Object.entries(THEME_STYLE_PARAMS)) {
+    seed[param] = String(DEFAULT_DESIGN[key as keyof typeof DEFAULT_DESIGN]);
+  }
+  return seed;
+}
+
+/**
+ * One swatch button per theme, plus the leading Default. The chip is a miniature
+ * board: background (checkerboard when transparent), a two-digit sample in the
+ * digit ink, a caption bar in the label ink, and the theme's border. Colours are
+ * registry values — safe by construction, no escaping needed beyond quotes.
+ */
+function renderSwatches(): string {
+  const buttons = THEMES.map((theme) => {
+    const s = theme.style;
+    const chipStyle: string[] = [];
+    if (s.boardBackground !== 'transparent') chipStyle.push(`background:${s.boardBackground}`);
+    if (s.borderWidth > 0) chipStyle.push(`border:${s.borderWidth}px solid ${s.borderColor}`);
+    const style = chipStyle.length ? ` style="${chipStyle.join(';')}"` : '';
+    return (
+      `<button type="button" class="swatch" data-theme-name="${theme.name}"` +
+      ` data-board="${s.boardBackground === 'transparent' ? 'transparent' : 'colour'}"` +
+      ` title="${escapeAttr(theme.description)}" aria-pressed="false">` +
+      `<span class="chip"${style}>` +
+      `<span class="chipDigits" style="color:${s.digitColor}">00</span>` +
+      `<span class="chipBar" style="background:${s.labelColor}"></span>` +
+      `</span><span class="swatchName">${escapeAttr(theme.label)}</span></button>`
+    );
+  });
+
+  const defaults = defaultStyleSeed();
+  return (
+    `<button type="button" class="swatch" data-theme-name="" data-board="colour"` +
+    ` title="No theme — every style parameter explicit" aria-pressed="true">` +
+    `<span class="chip" style="background:${defaults.board}">` +
+    `<span class="chipDigits" style="color:${defaults.digit}">00</span>` +
+    `<span class="chipBar" style="background:${defaults.label}"></span>` +
+    `</span><span class="swatchName">Default</span></button>` +
+    buttons.join('')
+  );
 }
 
 /**
@@ -141,6 +192,25 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
   input[type=color] { padding: 4px; height: 38px; }
   input:disabled { opacity: 0.45; cursor: not-allowed; }
   fieldset { border: 0; padding: 0; margin: 0; grid-column: 1 / -1; }
+  .themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 10px; }
+  .swatch {
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    padding: 10px 8px; background: var(--field); border: 1px solid var(--line);
+    border-radius: 10px; cursor: pointer; font: inherit; font-size: 0.78rem; color: var(--muted);
+  }
+  .swatch:hover { color: var(--ink); border-color: var(--accent); }
+  .swatch[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .chip {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; width: 78px; height: 46px; border-radius: 8px; box-sizing: border-box;
+  }
+  /* A transparent board has no colour of its own — the checkerboard says so. */
+  .swatch[data-board="transparent"] .chip {
+    background: repeating-conic-gradient(#9aa0b4 0% 25%, #ced2df 0% 50%) 0 / 10px 10px;
+  }
+  .chipDigits { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1rem; line-height: 1; }
+  .chipBar { width: 36px; height: 4px; border-radius: 2px; }
+  .swatchName { text-align: center; }
   .units { display: flex; flex-wrap: wrap; gap: 14px; }
   .units label { display: flex; align-items: center; gap: 7px; text-transform: none; letter-spacing: 0; font-size: 0.9rem; color: var(--ink); margin: 0; }
   .units input { width: auto; }
@@ -156,7 +226,7 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
     padding: 7px 13px; border-radius: 8px; font: inherit; font-size: 0.82rem; cursor: pointer;
   }
   button:hover { color: var(--ink); border-color: var(--accent); }
-  #theme { flex: none; }
+  #mode { flex: none; }
   .notice { background: var(--notice-bg); border: 1px solid var(--notice-line); color: var(--notice-ink); padding: 12px 16px; border-radius: 8px; font-size: 0.88rem; }
   footer { margin-top: 44px; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--line); padding-top: 20px; }
   footer p + p { margin-top: 12px; }
@@ -171,7 +241,7 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
       <h1>Countdown timer for email</h1>
       <p class="sub">Self-hosted animated GIFs that work in any ESP. Configure below, then paste the snippet into your email.</p>
     </div>
-    <button type="button" id="theme">Light mode</button>
+    <button type="button" id="mode">Light mode</button>
   </header>
   ${signingNotice}
 
@@ -181,6 +251,12 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
   <p class="hint">The preview is shown at the size it will occupy in an email, not at its pixel size. It sits on the page background — switch themes to check a transparent board against both a light and a dark email.</p>
 
   <form id="form">
+    <fieldset>
+      <label>Style — pick a look, then tweak anything below it</label>
+      <div class="themes">
+        ${renderSwatches()}
+      </div>
+    </fieldset>
     <div>
       <label for="until">Ends at (UTC)</label>
       <input type="datetime-local" id="until" name="until">
@@ -208,6 +284,11 @@ export function renderBuilderPage(signingEnabled: boolean, origin?: string): str
     <div>
       <label for="digit">Digit colour</label>
       <input type="color" id="digit" name="digit" value="#ffffff">
+    </div>
+    <div>
+      <label for="label">Label colour</label>
+      <input type="color" id="label" name="label" value="#ffffff">
+      <span class="fieldHint">Caption ink — defaults to the digit colour.</span>
     </div>
     <div>
       <label for="board">Board colour</label>
@@ -274,15 +355,22 @@ ${boardCssWidth.toString()}
   const preview = document.getElementById('preview');
   const urlEl = document.getElementById('url');
   const snippetEl = document.getElementById('snippet');
-  const themeBtn = document.getElementById('theme');
+  const modeBtn = document.getElementById('mode');
   const retina = document.getElementById('retina');
   const tooWide = document.getElementById('tooWide');
   const previewError = document.getElementById('previewError');
   const sizeInput = document.getElementById('size');
   const sizeMaxEl = document.getElementById('sizeMax');
   const untilField = document.getElementById('until');
+  const transparentBox = document.getElementById('transparent');
+  const labelsBox = document.getElementById('labels');
   const CAPTIONS = ['labelDays', 'labelHours', 'labelMinutes', 'labelSeconds'];
   const DEFAULT_LABELS = ${JSON.stringify(UNIT_LABELS)};
+  // The theme registry and the default style, both as query-param strings — the
+  // page diffs the form against whichever seed is active, and emits only the
+  // differences, which is what keeps a themed URL short.
+  const THEMES = ${JSON.stringify(THEMES.map((t) => ({ name: t.name, params: themeQuerySeed(t) })))};
+  const DEFAULT_STYLE = ${JSON.stringify(defaultStyleSeed())};
 
   // What to say when a load fails and the server cannot name the reason either.
   const LOAD_FAILURE = 'The preview failed to load. Check the connection, then change any setting to retry.';
@@ -298,19 +386,19 @@ ${boardCssWidth.toString()}
   // An action button, not a state toggle: the label names what a click DOES.
   // An aria-pressed on top of a changing label announces the opposite state as
   // the current one, so it is deliberately absent.
-  function paintThemeButton() {
-    themeBtn.textContent =
+  function paintModeButton() {
+    modeBtn.textContent =
       document.documentElement.dataset.theme === 'dark' ? 'Light mode' : 'Dark mode';
   }
 
-  themeBtn.addEventListener('click', () => {
+  modeBtn.addEventListener('click', () => {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
     try { localStorage.setItem('ect-theme', next); } catch (e) { /* private mode */ }
-    paintThemeButton();
+    paintModeButton();
   });
 
-  paintThemeButton();
+  paintModeButton();
 
   // Default to one week out, rounded to the hour. The ISO string is kept
   // separately from the field: some mobile engines silently discard a value
@@ -325,14 +413,68 @@ ${boardCssWidth.toString()}
   let untilTouched = false;
   untilField.addEventListener('input', () => { untilTouched = true; });
 
+  // The selected theme's name, '' for none. Kept here rather than read off the
+  // swatches so the URL emitter always knows which seed the form is diffed
+  // against, even mid-edit.
+  let selectedTheme = '';
+
+  // Whether the label colour was chosen deliberately. Until it is, it tracks
+  // the digit colour — the behaviour captions had before the field existed —
+  // so someone picking colours only never meets a surprise caption ink.
+  let labelTouched = false;
+  form.label.addEventListener('input', () => { labelTouched = true; });
+
+  function findTheme(name) {
+    return THEMES.find((t) => t.name === name) || null;
+  }
+
+  /**
+   * Write a theme's seed — or the default style for '' — into the form fields.
+   * Assigning .value fires no events and build() is not called; callers decide
+   * whether a rebuild follows (a click wants one, the initial load does not).
+   */
+  function setThemeFields(name) {
+    const theme = findTheme(name);
+    const seed = theme ? theme.params : DEFAULT_STYLE;
+    selectedTheme = theme ? theme.name : '';
+    form.digit.value = seed.digit;
+    form.label.value = seed.label;
+    form.border.value = seed.border;
+    form.borderWidth.value = seed.borderWidth;
+    form.divider.value = seed.divider;
+    form.shape.value = seed.shape;
+    sizeInput.value = seed.size;
+    transparentBox.checked = seed.board === 'transparent';
+    if (seed.board !== 'transparent') form.board.value = seed.board;
+    // A theme that differentiates captions fixes the label; one that does not
+    // returns it to digit-tracking.
+    labelTouched = seed.label !== seed.digit;
+  }
+
+  function paintSwatches() {
+    document.querySelectorAll('.swatch').forEach((btn) => {
+      btn.setAttribute('aria-pressed', btn.dataset.themeName === selectedTheme ? 'true' : 'false');
+    });
+  }
+
+  document.querySelectorAll('.swatch').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      setThemeFields(btn.dataset.themeName);
+      paintSwatches();
+      build();
+    });
+  });
+
   function showLoadFailure(message) {
     previewError.textContent = message;
     previewError.hidden = false;
   }
 
   function build() {
-    const showLabels = document.getElementById('labels').checked;
+    const showLabels = labelsBox.checked;
     for (const name of CAPTIONS) form[name].disabled = !showLabels;
+    form.label.disabled = !showLabels;
+    if (!labelTouched) form.label.value = form.digit.value;
 
     const units = [...document.querySelectorAll('input[name=unit]:checked')].map((el) => el.value);
     const scale = retina.checked ? 2 : 1;
@@ -396,17 +538,49 @@ ${boardCssWidth.toString()}
 
     // The URL always mirrors the form — it is copyable from a blocked state
     // too, with the notice saying plainly that it will not render yet.
+    //
+    // Style parameters are emitted two ways. With a theme selected the URL
+    // carries the theme name plus only the values that differ from its seed —
+    // short, and the overrides stay legible. Without one, every style
+    // parameter is written explicitly, byte-for-byte as the pre-theme builder
+    // did, so an untouched form still produces the URL it always did.
+    const styleOf = (value) => value.replace('#', '').toLowerCase();
+    const effective = {
+      digit: styleOf(form.digit.value),
+      label: styleOf(form.label.value),
+      board: transparentBox.checked ? 'transparent' : styleOf(form.board.value),
+      border: styleOf(form.border.value),
+      borderWidth: bwRaw === '' ? '0' : bwRaw,
+      divider: form.divider.value,
+      shape: form.shape.value,
+      size: sizeRaw === '' ? DEFAULT_STYLE.size : sizeRaw,
+    };
+    const activeTheme = findTheme(selectedTheme);
+    const seedOf = (key) =>
+      activeTheme ? activeTheme.params[key].replace('#', '').toLowerCase() : null;
+
     const params = new URLSearchParams();
     if (untilIso) params.set('until', untilIso);
     if (units.length) params.set('units', units.join(','));
     params.set('labels', showLabels ? '1' : '0');
-    params.set('digit', form.digit.value.replace('#', ''));
-    params.set('board', document.getElementById('transparent').checked ? 'transparent' : form.board.value.replace('#', ''));
-    params.set('border', form.border.value.replace('#', ''));
-    params.set('borderWidth', bwRaw);
-    params.set('divider', form.divider.value);
-    params.set('shape', form.shape.value);
-    params.set('size', sizeRaw);
+    if (activeTheme) {
+      params.set('theme', selectedTheme);
+      for (const key of ['digit', 'board', 'border', 'borderWidth', 'divider', 'shape', 'size']) {
+        if (effective[key] !== seedOf(key)) params.set(key, effective[key]);
+      }
+      if (effective.label !== seedOf('label')) params.set('label', effective.label);
+    } else {
+      params.set('digit', effective.digit);
+      params.set('board', effective.board);
+      params.set('border', effective.border);
+      params.set('borderWidth', bwRaw);
+      params.set('divider', effective.divider);
+      params.set('shape', effective.shape);
+      params.set('size', sizeRaw);
+      // 'label' rides along only once it departs from the digit colour — the
+      // caption-follows-digit default keeps URLs exactly as they were.
+      if (effective.label !== effective.digit) params.set('label', effective.label);
+    }
     params.set('scale', String(scale));
     if (showLabels) {
       // Omitted when blank, so a URL only carries the captions you changed.
@@ -487,6 +661,71 @@ ${boardCssWidth.toString()}
     });
   });
 
+  /**
+   * Load a pasted /?… link into the form so it round-trips instead of silently
+   * reverting to the default look. Best effort by design: anything absent or
+   * invalid keeps its default, a colour input only ever receives a valid
+   * #rrggbb (browsers would otherwise blank it to #000000), and the URL the
+   * form then emits may normalise spelling while rendering the same image.
+   */
+  function loadFromLocation() {
+    if (!location.search) return;
+    const q = new URLSearchParams(location.search);
+
+    const theme = findTheme(q.get('theme') || '');
+    if (theme) setThemeFields(theme.name);
+
+    const untilRaw = q.get('until');
+    if (untilRaw) {
+      const ms = Date.parse(untilRaw);
+      if (!Number.isNaN(ms)) {
+        untilField.value = new Date(ms).toISOString().slice(0, 16);
+        untilTouched = true;
+      }
+    }
+    const unitsRaw = q.get('units');
+    if (unitsRaw) {
+      const keep = unitsRaw.split(',').map((u) => u.trim().toLowerCase());
+      document.querySelectorAll('input[name=unit]').forEach((box) => {
+        box.checked = keep.includes(box.value);
+      });
+    }
+    if (q.get('labels') === '0') labelsBox.checked = false;
+    if (q.get('scale') === '1') retina.checked = false;
+    for (const name of CAPTIONS) {
+      const value = q.get(name);
+      if (value) form[name].value = value.slice(0, ${MAX_LABEL_LENGTH});
+    }
+
+    // Explicit style parameters override whatever the theme seeded — the same
+    // precedence the server applies when it expands ?theme=.
+    const colourParam = (raw) => {
+      const v = (raw || '').replace('#', '').toLowerCase();
+      return /^[0-9a-f]{6}$/.test(v) ? '#' + v : null;
+    };
+    const digit = colourParam(q.get('digit'));
+    if (digit) form.digit.value = digit;
+    const label = colourParam(q.get('label'));
+    if (label) { form.label.value = label; labelTouched = true; }
+    if (q.get('board') === 'transparent') {
+      transparentBox.checked = true;
+    } else {
+      const board = colourParam(q.get('board'));
+      if (board) { transparentBox.checked = false; form.board.value = board; }
+    }
+    const border = colourParam(q.get('border'));
+    if (border) form.border.value = border;
+    const borderWidth = q.get('borderWidth');
+    if (borderWidth !== null && /^\\d+$/.test(borderWidth)) form.borderWidth.value = borderWidth;
+    if (['colon', 'dot', 'space'].includes(q.get('divider'))) form.divider.value = q.get('divider');
+    if (['rectangle', 'rounded'].includes(q.get('shape'))) form.shape.value = q.get('shape');
+    const size = q.get('size');
+    if (size !== null && /^\\d+$/.test(size)) sizeInput.value = size;
+
+    paintSwatches();
+  }
+
+  loadFromLocation();
   build();
 </script>
 </body>

@@ -42,11 +42,11 @@ describe('/ builder page', () => {
     expect(await (await get('/', on)).text()).toContain('SIGNING_SECRET');
   });
 
-  it('ships both themes and a control to switch between them', async () => {
+  it('ships both page modes and a control to switch between them', async () => {
     const html = await (await get('/')).text();
     expect(html).toContain('[data-theme="light"]');
     expect(html).toContain('[data-theme="dark"]');
-    expect(html).toContain('id="theme"');
+    expect(html).toContain('id="mode"');
     // Persisted, or the choice is lost on every reload.
     expect(html).toContain("localStorage.setItem('ect-theme'");
   });
