@@ -1,6 +1,6 @@
 {
   "name": "email-countdown-timer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Self-hosted animated countdown timers for email. Renders animated GIFs (with an Outlook PNG fallback) that work in any ESP. No database, no account, no Chrome.",
   "keywords": [
     "email",
