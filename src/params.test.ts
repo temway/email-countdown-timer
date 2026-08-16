@@ -322,6 +322,53 @@ describe('custom captions', () => {
   });
 });
 
+describe('themes', () => {
+  it('seeds the theme style and nothing else', () => {
+    const { design } = ok({ theme: 'ocean' });
+    expect(design.digitColor).toBe('#e0f2fe');
+    expect(design.labelColor).toBe('#7dd3fc');
+    expect(design.boardBackground).toBe('#082f49');
+    expect(design.fontSize).toBe(44);
+    // Content stays the caller's — a theme never decides what is counted.
+    expect(design.units).toEqual(DEFAULT_DESIGN.units);
+    expect(design.showLabels).toBe(DEFAULT_DESIGN.showLabels);
+    expect(design.scale).toBe(DEFAULT_DESIGN.scale);
+  });
+
+  it('lets an explicit style parameter override the seed', () => {
+    const { design } = ok({ theme: 'ocean', digit: 'ffffff', size: '30' });
+    expect(design.digitColor).toBe('#ffffff');
+    expect(design.fontSize).toBe(30);
+    expect(design.labelColor).toBe('#7dd3fc'); // untouched by the override
+  });
+
+  it('lets an explicit `label` beat the theme label', () => {
+    expect(ok({ theme: 'ocean', label: 'ffffff' }).design.labelColor).toBe('#ffffff');
+  });
+
+  it('combines with content parameters', () => {
+    const { design } = ok({ theme: 'rose', units: 'hours,minutes', labelDays: 'JOURS' });
+    expect(design.units).toEqual(['hours', 'minutes']);
+    expect(design.boardBackground).toBe('#fff1f2');
+  });
+
+  it('resolves the theme case-insensitively', () => {
+    expect(ok({ theme: ' OCEAN ' }).design.digitColor).toBe('#e0f2fe');
+  });
+
+  it('treats an empty theme as absent, so the default applies', () => {
+    expect(ok({ theme: '' }).design).toEqual(DEFAULT_DESIGN);
+  });
+
+  it('rejects an unknown theme, naming the valid ones', () => {
+    const message = err({ until: UNTIL, theme: 'midnight' });
+    expect(message).toMatch(/^theme: /);
+    expect(message).toMatch(/midnight/);
+    expect(message).toContain('dark');
+    expect(message).toContain('slate');
+  });
+});
+
 describe('error messages', () => {
   it('names the offending field so a 400 is actionable', () => {
     expect(err({ until: UNTIL, size: 'abc' })).toMatch(/^size: /);

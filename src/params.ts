@@ -24,6 +24,7 @@ import {
   type UnitLabelOverrides,
   type UnitName,
 } from './raster/options.js';
+import { THEME_NAMES, findTheme, themeQuerySeed } from './raster/themes.js';
 
 /** Font size bounds. The upper bound caps a single render's raster area. */
 export const MIN_FONT_SIZE = 12;
@@ -184,6 +185,27 @@ export function parseCountdownParams(query: Record<string, string | undefined>):
   const input: Record<string, string> = {};
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined && value !== '') input[key] = value;
+  }
+
+  // Resolve `?theme=` BEFORE the schema: this is the only point where
+  // "explicitly named" is observable, so it is the only place a theme seed can
+  // defer to the caller. The seed fills style keys the caller did NOT name;
+  // everything the caller did name — and everything the theme says nothing
+  // about — flows through the schema's own validation and defaults below. The
+  // theme key itself is dropped here, and zod strips unknown keys anyway.
+  const themeName = input.theme?.trim().toLowerCase();
+  delete input.theme;
+  if (themeName !== undefined) {
+    const theme = findTheme(themeName);
+    if (!theme) {
+      return {
+        ok: false,
+        error: `theme: unknown theme '${themeName}' — valid themes: ${THEME_NAMES.join(', ')}`,
+      };
+    }
+    for (const [key, value] of Object.entries(themeQuerySeed(theme))) {
+      if (input[key] === undefined) input[key] = value;
+    }
   }
 
   const parsed = countdownParamsSchema.safeParse(input);
